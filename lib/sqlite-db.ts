@@ -187,6 +187,48 @@ CREATE INDEX IF NOT EXISTS idx_royalty_payouts_creator
   ON royalty_payouts (creator_wallet, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_royalty_payouts_listing
   ON royalty_payouts (listing_id);
+
+CREATE TABLE IF NOT EXISTS agent_market_maker_quotes (
+  id                    TEXT PRIMARY KEY,
+  agent_wallet          TEXT NOT NULL,
+  collection_id         INTEGER NOT NULL,
+  bid_price_stroops     TEXT NOT NULL,
+  ask_price_stroops     TEXT NOT NULL,
+  bid_size              INTEGER NOT NULL,
+  ask_size              INTEGER NOT NULL,
+  inventory_units       INTEGER NOT NULL DEFAULT 0,
+  max_inventory_units   INTEGER NOT NULL DEFAULT 10,
+  status                TEXT NOT NULL DEFAULT 'ACTIVE',
+  updated_at            INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_agent_mm_quotes_agent
+  ON agent_market_maker_quotes (agent_wallet, collection_id);
+
+CREATE TABLE IF NOT EXISTS lore_audit_reports (
+  id                    TEXT PRIMARY KEY,
+  collection_id         INTEGER,
+  total_narratives_scanned INTEGER NOT NULL,
+  contradictions_found  INTEGER NOT NULL,
+  status                TEXT NOT NULL DEFAULT 'COMPLETED',
+  created_at            INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lore_audit_reports_col
+  ON lore_audit_reports (collection_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS lore_contradiction_items (
+  id                    TEXT PRIMARY KEY,
+  report_id             TEXT NOT NULL REFERENCES lore_audit_reports(id) ON DELETE CASCADE,
+  entity_name           TEXT NOT NULL,
+  severity              TEXT NOT NULL,
+  passage_a             TEXT NOT NULL,
+  token_id_a            INTEGER,
+  passage_b             TEXT NOT NULL,
+  token_id_b            INTEGER,
+  explanation           TEXT NOT NULL,
+  confidence            REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lore_contradictions_rep
+  ON lore_contradiction_items (report_id);
 `;
 
 // Issue #89 (phase-140): `listings` predates the creator/royalty concept, so

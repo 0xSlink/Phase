@@ -35,6 +35,14 @@ export type SecurityCounterName =
   | "distributor_available_balance_stale"
   | "distributor_pending"
   | "distributor_refill_succeeded"
+  | "support_bot_queries_total"
+  | "support_bot_errors_diagnosed"
+  | "agent_quotes_published"
+  | "agent_inventory_limit_breaches"
+  | "mcp_tools_listed"
+  | "mcp_tool_calls_executed"
+  | "lore_audits_performed"
+  | "lore_contradictions_detected";
 
 const counters = new Map<SecurityCounterName, number>()
 
