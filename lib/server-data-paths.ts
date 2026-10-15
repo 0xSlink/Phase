@@ -38,6 +38,7 @@ const FILES = {
   x402DeadLetter: "x402-dead-letter.json",
   generationJobs: "generation-jobs.json",
   generationDlq: "generation-dlq.json",
+  winbackExperiments: "winback-experiments.json",
 } as const
 
 export type ServerDataFile = keyof typeof FILES

@@ -35,6 +35,17 @@ export type SecurityCounterName =
   | "distributor_available_balance_stale"
   | "distributor_pending"
   | "distributor_refill_succeeded"
+  | "image_variant_generated"
+  | "image_crop_focal_computed"
+  | "winback_dormant_detected"
+  | "winback_experiment_dispatched"
+  | "winback_fatigue_suppressed"
+  | "ve_lock_created"
+  | "ve_lock_extended"
+  | "ve_fee_distributed"
+  | "ve_fee_claimed"
+  | "gauge_vote_cast"
+  | "gauge_epoch_distributed";
 
 const counters = new Map<SecurityCounterName, number>()
 

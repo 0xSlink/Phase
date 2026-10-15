@@ -187,6 +187,49 @@ CREATE INDEX IF NOT EXISTS idx_royalty_payouts_creator
   ON royalty_payouts (creator_wallet, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_royalty_payouts_listing
   ON royalty_payouts (listing_id);
+
+CREATE TABLE IF NOT EXISTS ve_locks (
+  wallet              TEXT PRIMARY KEY,
+  amount_stroops      TEXT NOT NULL,
+  lock_start          INTEGER NOT NULL,
+  lock_end            INTEGER NOT NULL,
+  ve_weight           REAL NOT NULL,
+  last_claim_epoch    INTEGER NOT NULL DEFAULT 0,
+  created_at          INTEGER NOT NULL,
+  updated_at          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ve_locks_end
+  ON ve_locks (lock_end);
+
+CREATE TABLE IF NOT EXISTS ve_fee_distribution (
+  epoch_id            INTEGER PRIMARY KEY,
+  total_fees_stroops  TEXT NOT NULL,
+  total_ve_weight     REAL NOT NULL,
+  fee_per_weight      REAL NOT NULL,
+  created_at          INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gauge_votes (
+  id                  TEXT PRIMARY KEY,
+  epoch               INTEGER NOT NULL,
+  wallet              TEXT NOT NULL,
+  collection_id       INTEGER NOT NULL,
+  weight_bps          INTEGER NOT NULL,
+  effective_ve_weight REAL NOT NULL,
+  updated_at          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gauge_votes_epoch_col
+  ON gauge_votes (epoch, collection_id);
+CREATE INDEX IF NOT EXISTS idx_gauge_votes_wallet_epoch
+  ON gauge_votes (wallet, epoch);
+
+CREATE TABLE IF NOT EXISTS gauge_epoch_aggregates (
+  epoch               INTEGER NOT NULL,
+  collection_id       INTEGER NOT NULL,
+  total_ve_weight     REAL NOT NULL,
+  allocated_budget_stroops TEXT NOT NULL,
+  PRIMARY KEY (epoch, collection_id)
+);
 `;
 
 // Issue #89 (phase-140): `listings` predates the creator/royalty concept, so

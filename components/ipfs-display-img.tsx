@@ -8,12 +8,23 @@ type Props = {
   alt?: string
   className?: string
   loading?: "lazy" | "eager"
+  variant?: "thumbnail" | "preview" | "og" | "square" | "landscape"
+  focalPoint?: { x: number; y: number }
   /** Se llama cuando ningún gateway devolvió imagen válida. */
   onExhausted?: () => void
 }
 
-export function IpfsDisplayImg({ uri, alt = "", className, loading = "lazy", onExhausted }: Props) {
-  const candidates = useMemo(() => ipfsHttpsGatewayUrls(uri), [uri])
+export function IpfsDisplayImg({ uri, alt = "", className, loading = "lazy", variant, focalPoint, onExhausted }: Props) {
+  const candidates = useMemo(() => {
+    const urls = ipfsHttpsGatewayUrls(uri)
+    if (!variant) return urls
+    return urls.map((u) => {
+      const glue = u.includes("?") ? "&" : "?"
+      const fx = focalPoint?.x !== undefined ? `&fx=${focalPoint.x.toFixed(2)}` : ""
+      const fy = focalPoint?.y !== undefined ? `&fy=${focalPoint.y.toFixed(2)}` : ""
+      return `${u}${glue}variant=${variant}${fx}${fy}`
+    })
+  }, [uri, variant, focalPoint])
   const [idx, setIdx] = useState(0)
 
   useEffect(() => {
