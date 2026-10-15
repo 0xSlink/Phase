@@ -35,6 +35,14 @@ export type SecurityCounterName =
   | "distributor_available_balance_stale"
   | "distributor_pending"
   | "distributor_refill_succeeded"
+  | "buyback_burn_executed"
+  | "staked_fee_discount_applied"
+  | "bonding_curve_mint"
+  | "bonding_curve_burn"
+  | "prediction_market_created"
+  | "prediction_position_opened"
+  | "prediction_market_resolved"
+  | "prediction_payout_claimed";
 
 const counters = new Map<SecurityCounterName, number>()
 

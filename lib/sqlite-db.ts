@@ -187,6 +187,60 @@ CREATE INDEX IF NOT EXISTS idx_royalty_payouts_creator
   ON royalty_payouts (creator_wallet, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_royalty_payouts_listing
   ON royalty_payouts (listing_id);
+
+CREATE TABLE IF NOT EXISTS buyback_burn_events (
+  id                      TEXT PRIMARY KEY,
+  epoch                   INTEGER NOT NULL,
+  amount_spent_stroops    TEXT NOT NULL,
+  phaselq_burned_stroops  TEXT NOT NULL,
+  source                  TEXT NOT NULL,
+  tx_hash                 TEXT,
+  created_at              INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_buyback_burn_epoch
+  ON buyback_burn_events (epoch, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS bonding_curve_editions (
+  collection_id           INTEGER PRIMARY KEY,
+  base_price_stroops      TEXT NOT NULL,
+  slope_stroops           TEXT NOT NULL,
+  current_supply          INTEGER NOT NULL DEFAULT 0,
+  max_supply              INTEGER NOT NULL DEFAULT 1000,
+  reserve_stroops         TEXT NOT NULL DEFAULT '0',
+  updated_at              INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS prediction_markets (
+  id                      TEXT PRIMARY KEY,
+  question                TEXT NOT NULL,
+  category                TEXT NOT NULL,
+  collection_id           INTEGER,
+  outcome_yes_pool        TEXT NOT NULL DEFAULT '0',
+  outcome_no_pool         TEXT NOT NULL DEFAULT '0',
+  status                  TEXT NOT NULL DEFAULT 'active',
+  resolved_outcome        TEXT,
+  closes_at               INTEGER NOT NULL,
+  created_at              INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_prediction_markets_status
+  ON prediction_markets (status, closes_at);
+CREATE INDEX IF NOT EXISTS idx_prediction_markets_col
+  ON prediction_markets (collection_id);
+
+CREATE TABLE IF NOT EXISTS prediction_positions (
+  id                      TEXT PRIMARY KEY,
+  market_id               TEXT NOT NULL REFERENCES prediction_markets(id) ON DELETE CASCADE,
+  wallet                  TEXT NOT NULL,
+  outcome                 TEXT NOT NULL,
+  amount_stroops          TEXT NOT NULL,
+  shares                  REAL NOT NULL,
+  claimed                 INTEGER NOT NULL DEFAULT 0,
+  created_at              INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_prediction_positions_market
+  ON prediction_positions (market_id);
+CREATE INDEX IF NOT EXISTS idx_prediction_positions_wallet
+  ON prediction_positions (wallet, market_id);
 `;
 
 // Issue #89 (phase-140): `listings` predates the creator/royalty concept, so

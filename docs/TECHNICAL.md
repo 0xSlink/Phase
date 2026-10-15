@@ -94,6 +94,10 @@ flowchart TB
 | `lib/metadata-migration.ts` | Metadata version migration v1→v2 (phase-124) |
 | `lib/wallet-nft-index-cache.ts` | LRU-cached wallet NFT token-id index with stale-on-error fallback (phase-135) |
 | `lib/explore-owners-cache.ts` | Cached Explore owner-scan result with stale-on-error fallback (phase-135) |
+| `lib/buyback-burn.ts` | Treasury buyback and burn accounting from marketplace fees (phase-146) |
+| `lib/staked-forge-discounts.ts` | Staked FORGE tier discounts on x402 endpoints and settlement (phase-147) |
+| `lib/bonding-curve.ts` | Continuous bonding curves for open edition drops with supply-priced minting (phase-148) |
+| `lib/prediction-markets.ts` | Prediction markets on drop outcomes with resolve-to-creator bonus (phase-149) |
 | `contracts/` | Soroban Rust contracts and tooling docs |
 | `docs/` | Technical and operational documentation |
 
@@ -369,7 +373,7 @@ Critical groups:
 - Gemini runtime (`GEMINI_API_KEY`)
 - Writable server data directory (`PHASE_SERVER_DATA_DIR`)
 
-### 9.1 Feature flags (phase-82..141)
+### 9.1 Feature flags (phase-82..149)
 
 All flags default to **off** (safe rollback). Set to `1`/`true` to enable.
 
@@ -402,6 +406,10 @@ NEXT_PUBLIC_FEATURE_PHASE_83=1
 NEXT_PUBLIC_FEATURE_PHASE_139=1
 NEXT_PUBLIC_FEATURE_PHASE_140=1
 NEXT_PUBLIC_FEATURE_PHASE_141=1
+NEXT_PUBLIC_FEATURE_PHASE_146=1
+NEXT_PUBLIC_FEATURE_PHASE_147=1
+NEXT_PUBLIC_FEATURE_PHASE_148=1
+NEXT_PUBLIC_FEATURE_PHASE_149=1
 # Server-only aliases also accepted: FEATURE_PHASE_104, etc.
 ```
 
