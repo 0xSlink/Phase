@@ -8,6 +8,9 @@ import {
   isPhase140Enabled,
   computeRoyaltySplit,
   recordRoyaltyPayout,
+  isPhaseCollabSplitsEnabled,
+  computeCollabSplits,
+  recordCollabSplits,
 } from "@/lib/market-store"
 import { createNotification } from "@/lib/notification-store"
 import { isPricingOracleEnabled, markSuggestionSold } from "@/lib/pricing-oracle"
@@ -83,5 +86,5 @@ export async function POST(
       .catch(() => { /* silent */ })
   }
 
-  return NextResponse.json({ ok: true, offer: updated, ...(royalty ? { royalty } : {}) })
+  return NextResponse.json({ ok: true, offer: updated, ...(royalty ? { royalty } : {}), ...(splits ? { splits } : {}) })
 }

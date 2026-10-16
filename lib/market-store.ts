@@ -27,6 +27,22 @@ export type Listing = {
   creator_wallet?: string;
   /** phase-140: basis points of the sale paid to `creator_wallet` (0-10000). */
   royalty_bps?: number;
+  /** Spike 673 (phase-editions): 1-based edition index within collection; edition_size = limited cap. */
+  edition_number?: number;
+  edition_size?: number;
+  /** Spike 673: artist-proof hold, excluded from public sale but still enumerable. */
+  is_artist_proof?: boolean;
+  /** Spike 673: 'limited' | 'open' — open editions are time-boxed, limited are supply-capped. */
+  supply_mode?: 'limited' | 'open';
+  /** Spike 672 (phase-timed-drops): ms epoch window; null = always live. */
+  drop_start_at?: number;
+  drop_end_at?: number;
+  /** Spike 675 (phase-dutch-auction): descending primary price; nulls = fixed price. */
+  dutch_start_price?: number;
+  dutch_floor_price?: number;
+  dutch_end_at?: number;
+  /** Spike 674 (phase-collab-splits): N-way payees, sum bps <= 10000. */
+  split_payees?: Array<{ wallet: string; bps: number }>;
 };
 
 export type Offer = {
@@ -203,6 +219,16 @@ type ListingRow = {
   status: ListingStatus;
   creator_wallet: string | null;
   royalty_bps: number | null;
+  edition_number: number | null;
+  edition_size: number | null;
+  is_artist_proof: number | null;
+  supply_mode: string | null;
+  drop_start_at: number | null;
+  drop_end_at: number | null;
+  dutch_start_price: number | null;
+  dutch_floor_price: number | null;
+  dutch_end_at: number | null;
+  split_payees_json: string | null;
 };
 
 function rowToListing(row: ListingRow): Listing {
@@ -220,7 +246,121 @@ function rowToListing(row: ListingRow): Listing {
     status: row.status,
     creator_wallet: row.creator_wallet ?? undefined,
     royalty_bps: row.royalty_bps ?? undefined,
+    edition_number: row.edition_number ?? undefined,
+    edition_size: row.edition_size ?? undefined,
+    is_artist_proof: row.is_artist_proof === 1 ? true : undefined,
+    supply_mode: row.supply_mode === 'limited' || row.supply_mode === 'open' ? row.supply_mode : undefined,
+    drop_start_at: row.drop_start_at ?? undefined,
+    drop_end_at: row.drop_end_at ?? undefined,
+    dutch_start_price: row.dutch_start_price ?? undefined,
+    dutch_floor_price: row.dutch_floor_price ?? undefined,
+    dutch_end_at: row.dutch_end_at ?? undefined,
+    split_payees: (() => { try { const v = row.split_payees_json ? JSON.parse(row.split_payees_json) : undefined; return Array.isArray(v) ? v : undefined; } catch { return undefined; } })(),
   };
+}
+
+export function isPhaseEditionsEnabled(): boolean { return isFeatureEnabled('phase-editions'); }
+export function isPhaseCollabSplitsEnabled(): boolean { return isFeatureEnabled('phase-collab-splits'); }
+export function isPhaseTimedDropsEnabled(): boolean { return isFeatureEnabled('phase-timed-drops'); }
+export function isPhaseDutchAuctionEnabled(): boolean { return isFeatureEnabled('phase-dutch-auction'); }
+export function phaseEditionsRollbackNote(): string { return flagRollbackNote('phase-editions'); }
+export function phaseCollabSplitsRollbackNote(): string { return flagRollbackNote('phase-collab-splits'); }
+export function phaseTimedDropsRollbackNote(): string { return flagRollbackNote('phase-timed-drops'); }
+export function phaseDutchAuctionRollbackNote(): string { return flagRollbackNote('phase-dutch-auction'); }
+
+/** Spike 673: 'Edition X/Y' label, or 'Artist Proof' for AP holds. Pure. */
+export function editionBadge(listing: Pick<Listing, 'edition_number' | 'edition_size' | 'is_artist_proof'>): string | null {
+  if (listing.is_artist_proof) return 'Artist Proof';
+  if (listing.edition_number != null && listing.edition_size != null) return `Edition ${listing.edition_number}/${listing.edition_size}`;
+  if (listing.edition_number != null) return `Edition ${listing.edition_number}`;
+  return null;
+}
+
+/** Spike 673: validate edition fields. AP entries must carry edition_number; limited needs size. */
+export function validateEditionFields(l: Pick<Listing, 'edition_number' | 'edition_size' | 'is_artist_proof' | 'supply_mode'>): { valid: boolean; error?: string } {
+  if (l.edition_number == null && l.edition_size == null && !l.is_artist_proof && !l.supply_mode) return { valid: true };
+  if (!isPhaseEditionsEnabled()) return { valid: false, error: 'phase-editions flag disabled' };
+  if (l.edition_number != null && (!Number.isInteger(l.edition_number) || l.edition_number < 1)) return { valid: false, error: 'edition_number must be a positive integer' };
+  if (l.edition_size != null && (!Number.isInteger(l.edition_size) || l.edition_size < 1)) return { valid: false, error: 'edition_size must be a positive integer' };
+  if (l.edition_number != null && l.edition_size != null && l.edition_number > l.edition_size) return { valid: false, error: 'edition_number exceeds edition_size' };
+  if (l.is_artist_proof && l.edition_number == null) return { valid: false, error: 'artist proof requires edition_number' };
+  if (l.supply_mode && l.supply_mode !== 'limited' && l.supply_mode !== 'open') return { valid: false, error: 'supply_mode must be limited or open' };
+  return { valid: true };
+}
+
+/** Spike 672: drop-window state machine. NULL window = always live (legacy). Pure. */
+export type DropStatus = 'live' | 'upcoming' | 'ended';
+export function dropStatusForListing(l: Pick<Listing, 'drop_start_at' | 'drop_end_at'>, now = Date.now()): DropStatus {
+  if (l.drop_start_at != null && now < l.drop_start_at) return 'upcoming';
+  if (l.drop_end_at != null && now > l.drop_end_at) return 'ended';
+  return 'live';
+}
+
+/** Spike 675: deterministic descending price. NULL range = fixed price_phaselq. Pure. */
+export function currentDutchPrice(l: Pick<Listing, 'price_phaselq' | 'dutch_start_price' | 'dutch_floor_price' | 'dutch_end_at' | 'listed_at'>, now = Date.now()): number {
+  if (!isPhaseDutchAuctionEnabled()) return l.price_phaselq;
+  const start = l.dutch_start_price ?? l.price_phaselq;
+  const floor = l.dutch_floor_price ?? l.price_phaselq;
+  const end = l.dutch_end_at;
+  if (end == null || end <= l.listed_at) return l.price_phaselq;
+  if (now <= l.listed_at) return start;
+  if (now >= end) return floor;
+  const t = (now - l.listed_at) / (end - l.listed_at);
+  return Math.max(floor, start - (start - floor) * t);
+}
+
+/** Spike 674: N-way split math. Remainder (dust) goes to first payee. Pure. */
+export type CollabPayee = { wallet: string; bps: number };
+export function computeCollabSplits(sale_amount_phaselq: number, payees: CollabPayee[]): Array<CollabPayee & { amount_phaselq: number }> {
+  const total = payees.reduce((a, p) => a + p.bps, 0);
+  if (total > 10000) throw new MarketStoreValidationError('VALIDATION_FAILED', 'split bps exceed 10000');
+  let assigned = 0;
+  const out = payees.map((p, i) => {
+    if (i < payees.length - 1) {
+      const amt = Math.round(sale_amount_phaselq * (p.bps / 10000) * 1e7) / 1e7;
+      assigned += amt;
+      return { ...p, amount_phaselq: amt };
+    }
+    return { ...p, amount_phaselq: Math.round((sale_amount_phaselq - assigned) * 1e7) / 1e7 };
+  });
+  try { void incSecurityCounter('collab_split_dust_rounded'); } catch {}
+  return out;
+}
+
+export type SaleSplitRow = { id: string; listing_id: string; offer_id: string; payee_wallet: string; bps: number; amount_phaselq: number; created_at: number };
+
+/** Spike 674: fan-out record at settle/accept time. Skips when flag off (caller guards). */
+export async function recordCollabSplits(listing_id: string, offer_id: string, splits: Array<CollabPayee & { amount_phaselq: number }>): Promise<SaleSplitRow[]> {
+  const now = Date.now();
+  const rows = splits.map((sp) => ({ id: randomUUID(), listing_id, offer_id, payee_wallet: sp.wallet, bps: sp.bps, amount_phaselq: sp.amount_phaselq, created_at: now }));
+  const db = getDb();
+  for (const r of rows) {
+    db.prepare('INSERT INTO sale_splits (id, listing_id, offer_id, payee_wallet, bps, amount_phaselq, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(r.id, r.listing_id, r.offer_id, r.payee_wallet, r.bps, r.amount_phaselq, r.created_at);
+  }
+  try { void incSecurityCounter('collab_split_recorded'); } catch {}
+  return rows;
+}
+
+export async function getSaleSplitsForListing(listing_id: string): Promise<SaleSplitRow[]> {
+  return getDb().prepare('SELECT * FROM sale_splits WHERE listing_id = ? ORDER BY created_at ASC').all(listing_id) as SaleSplitRow[];
+}
+
+/** Spike 672: ordered queue ticket (FIFO by position). Unique per (collection, wallet) — replay-safe. */
+export async function issueDropTicket(collection_id: number, wallet: string): Promise<{ id: string; position: number }> {
+  const db = getDb();
+  const existing = db.prepare('SELECT id, position FROM drop_tickets WHERE collection_id = ? AND wallet = ?').get(collection_id, wallet) as { id: string; position: number } | undefined;
+  if (existing) return existing;
+  const maxRow = db.prepare('SELECT COALESCE(MAX(position), 0) AS m FROM drop_tickets WHERE collection_id = ?').get(collection_id) as { m: number };
+  const position = (maxRow?.m ?? 0) + 1;
+  const id = randomUUID();
+  db.prepare('INSERT INTO drop_tickets (id, collection_id, wallet, position, created_at) VALUES (?, ?, ?, ?, ?)').run(id, collection_id, wallet, position, Date.now());
+  try { void incSecurityCounter('drop_queue_ticket_issued'); } catch {}
+  return { id, position };
+}
+
+export async function redeemDropTicket(collection_id: number, wallet: string): Promise<boolean> {
+  const r = getDb().prepare('UPDATE drop_tickets SET redeemed_at = ? WHERE collection_id = ? AND wallet = ? AND redeemed_at IS NULL').run(Date.now(), collection_id, wallet);
+  return r.changes === 1;
 }
 
 export async function getListing(id: string): Promise<Listing | null> {
@@ -233,8 +373,10 @@ export async function getListing(id: string): Promise<Listing | null> {
 export type ListingFilters = {
   collection_id?: number;
   seller_wallet?: string;
-  sort?: "price_asc" | "price_desc" | "newest";
+  sort?: "price_asc" | "price_desc" | "newest" | "edition_asc";
   status?: ListingStatus;
+  drop?: 'live' | 'upcoming' | 'ended';
+  exclude_artist_proof?: boolean;
 };
 
 export async function getListings(
@@ -253,13 +395,34 @@ export async function getListings(
     params.push(filters.seller_wallet);
   }
 
+  if (filters?.exclude_artist_proof) {
+    conditions.push("(is_artist_proof IS NULL OR is_artist_proof = 0)");
+  }
+  if (filters?.drop) {
+    const now = Date.now();
+    if (filters.drop === 'live') {
+      conditions.push('(drop_start_at IS NULL OR drop_start_at <= ?)');
+      params.push(now);
+      conditions.push('(drop_end_at IS NULL OR drop_end_at >= ?)');
+      params.push(now);
+    } else if (filters.drop === 'upcoming') {
+      conditions.push('drop_start_at IS NOT NULL AND drop_start_at > ?');
+      params.push(now);
+    } else {
+      conditions.push('drop_end_at IS NOT NULL AND drop_end_at < ?');
+      params.push(now);
+    }
+  }
+
   const sort = filters?.sort ?? "newest";
   const orderBy =
     sort === "price_asc"
       ? "price_phaselq ASC"
       : sort === "price_desc"
         ? "price_phaselq DESC"
-        : "listed_at DESC";
+        : sort === "edition_asc"
+          ? "edition_number ASC NULLS LAST, listed_at DESC"
+          : "listed_at DESC";
 
   const rows = getDb()
     .prepare(
@@ -279,13 +442,32 @@ export async function createListing(
     listed_at: Date.now(),
     status: "active",
   };
+  const editionCheck = validateEditionFields(listing);
+  if (!editionCheck.valid) {
+    throw new MarketStoreValidationError("VALIDATION_FAILED", editionCheck.error ?? "invalid edition fields");
+  }
+  if (listing.split_payees && listing.split_payees.length > 0) {
+    if (!isPhaseCollabSplitsEnabled()) {
+      throw new MarketStoreValidationError("FLAG_DISABLED", "phase-collab-splits flag disabled");
+    }
+    const total = listing.split_payees.reduce((a, p) => a + p.bps, 0);
+    if (total > 10000) throw new MarketStoreValidationError("VALIDATION_FAILED", "split bps exceed 10000");
+    if (listing.split_payees.length > 20) throw new MarketStoreValidationError("VALIDATION_FAILED", "too many payees (max 20)");
+  }
+  if ((listing.drop_start_at != null || listing.drop_end_at != null) && !isPhaseTimedDropsEnabled()) {
+    throw new MarketStoreValidationError("FLAG_DISABLED", "phase-timed-drops flag disabled");
+  }
+  if ((listing.dutch_start_price != null || listing.dutch_floor_price != null || listing.dutch_end_at != null) && !isPhaseDutchAuctionEnabled()) {
+    throw new MarketStoreValidationError("FLAG_DISABLED", "phase-dutch-auction flag disabled");
+  }
   getDb()
     .prepare(
       `INSERT INTO listings
          (id, token_id, collection_id, seller_wallet, price_phaselq,
           accepts_offers, min_offer, image, name, listed_at, status,
-          creator_wallet, royalty_bps)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          creator_wallet, royalty_bps, edition_number, edition_size, is_artist_proof, supply_mode,
+          drop_start_at, drop_end_at, dutch_start_price, dutch_floor_price, dutch_end_at, split_payees_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       listing.id,
@@ -301,6 +483,16 @@ export async function createListing(
       listing.status,
       listing.creator_wallet ?? null,
       listing.royalty_bps ?? null,
+      listing.edition_number ?? null,
+      listing.edition_size ?? null,
+      listing.is_artist_proof ? 1 : 0,
+      listing.supply_mode ?? null,
+      listing.drop_start_at ?? null,
+      listing.drop_end_at ?? null,
+      listing.dutch_start_price ?? null,
+      listing.dutch_floor_price ?? null,
+      listing.dutch_end_at ?? null,
+      listing.split_payees ? JSON.stringify(listing.split_payees) : null,
     );
   return listing;
 }

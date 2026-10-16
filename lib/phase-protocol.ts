@@ -2506,3 +2506,62 @@ export function isStellarDesyncError(message: string) {
     m.includes("method not found")
   )
 }
+
+
+// ── Spikes 672-675 (flag-gated pure helpers; no chain change when flags off) ──
+// Rollback: unset phase-editions / phase-collab-splits / phase-timed-drops /
+// phase-dutch-auction → callers fall back to legacy fixed-price / single-creator paths.
+
+export type EditionInfo = { edition_number?: number; edition_size?: number; is_artist_proof?: boolean; supply_mode?: 'limited' | 'open' };
+export type DutchQuoteInput = { start_price: number; floor_price: number; listed_at: number; end_at: number };
+
+/** Spike 673: 'Edition X/Y' or 'Artist Proof'. Null when uneditioned (legacy). */
+export function editionLabel(e: EditionInfo): string | null {
+  if (e.is_artist_proof) return 'Artist Proof';
+  if (e.edition_number != null && e.edition_size != null) return `Edition ${e.edition_number}/${e.edition_size}`;
+  if (e.edition_number != null) return `Edition ${e.edition_number}`;
+  return null;
+}
+
+/** Spike 675: off-chain mirror of on-chain dutch_quote (linear decay, floor-bound). */
+export function dutchQuoteAt(q: DutchQuoteInput, now = Date.now()): number {
+  if (now <= q.listed_at) return q.start_price;
+  if (now >= q.end_at || q.end_at <= q.listed_at) return q.floor_price;
+  const t = (now - q.listed_at) / (q.end_at - q.listed_at);
+  return Math.max(q.floor_price, q.start_price - (q.start_price - q.floor_price) * t);
+}
+
+/** Spike 675: slippage guard — quote older than maxAgeMs is stale (reject, do not settle). */
+export function isDutchQuoteStale(quotedAt: number, now = Date.now(), maxAgeMs = 60_000): boolean {
+  return now - quotedAt > maxAgeMs;
+}
+
+/** Spike 672: drop-window gate. Null bounds = always live (legacy collections). */
+export function isDropLive(drop_start_at: number | null | undefined, drop_end_at: number | null | undefined, now = Date.now()): boolean {
+  if (drop_start_at != null && now < drop_start_at) return false;
+  if (drop_end_at != null && now > drop_end_at) return false;
+  return true;
+}
+
+/** Spike 674: validate N-way payees (sum bps <= 10000, max 20, G-addresses). */
+export function validateSplitPayees(payees: Array<{ wallet: string; bps: number }>): { valid: boolean; error?: string } {
+  if (payees.length === 0) return { valid: false, error: 'at least one payee required' };
+  if (payees.length > 20) return { valid: false, error: 'too many payees (max 20)' };
+  let total = 0;
+  for (const p of payees) {
+    if (!/^G[A-Z2-7]{55}$/.test(p.wallet)) return { valid: false, error: 'invalid payee wallet' };
+    if (!Number.isInteger(p.bps) || p.bps <= 0) return { valid: false, error: 'bps must be a positive integer' };
+    total += p.bps;
+  }
+  if (total > 10000) return { valid: false, error: 'split bps exceed 10000' };
+  return { valid: true };
+}
+
+/** Map new on-chain spike errors to normalized UI codes (preserves #13 mapping). */
+export function spikeContractErrorCode(message: string): string | null {
+  if (/Contract\s*,\s*#18\b/.test(message)) return 'EDITION_SUPPLY_EXHAUSTED';
+  if (/Contract\s*,\s*#19\b/.test(message)) return 'DROP_NOT_LIVE';
+  if (/Contract\s*,\s*#20\b/.test(message)) return 'INVALID_SPLIT_PAYEES';
+  if (/Contract\s*,\s*#21\b/.test(message)) return 'DUTCH_QUOTE_STALE';
+  return null;
+}

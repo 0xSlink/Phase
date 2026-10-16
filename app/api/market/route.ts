@@ -15,12 +15,16 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const collectionId = searchParams.get("collection")
   const sellerWallet = searchParams.get("seller")
-  const sort = searchParams.get("sort") as "price_asc" | "price_desc" | "newest" | null
+  const sort = searchParams.get("sort") as "price_asc" | "price_desc" | "newest" | "edition_asc" | null
+  const drop = searchParams.get("drop") as "live" | "upcoming" | "ended" | null
+  const excludeAp = searchParams.get("exclude_ap") === "1"
 
   const listings = await getListings({
     collection_id: collectionId ? Number(collectionId) : undefined,
     seller_wallet: sellerWallet ?? undefined,
     sort: sort ?? "newest",
+    drop: drop ?? undefined,
+    exclude_artist_proof: excludeAp || undefined,
   })
   return NextResponse.json({ listings })
 }

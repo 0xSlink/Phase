@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
   }
   // Drop internal `cause` before returning to the client.
   const publicResults = results.map((r) =>
-    r.ok ? r : { signedXdr: r.signedXdr, ok: r.ok, error: r.error, attempts: r.attempts },
+    r.ok ? r : { signedXdr: r.signedXdr, ok: r.ok, error: r.error, code: r.resultCode, attempts: r.attempts },
   )
 
   // phase-119 observability headers (legacy single-XDR path only)
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
   // Legacy single-XDR response shape — unchanged for existing callers.
   const single = results[0]!
   if (!single.ok) {
-    return NextResponse.json({ error: single.error }, { status: 502, headers })
+    return NextResponse.json({ error: single.error, code: single.resultCode }, { status: 502, headers })
   }
   return NextResponse.json({ ok: true, hash: single.hash }, { headers })
 }
