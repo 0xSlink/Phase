@@ -8,6 +8,9 @@ import {
   isPhase140Enabled,
   computeRoyaltySplit,
   recordRoyaltyPayout,
+  isPhaseCollabSplitsEnabled,
+  computeCollabSplits,
+  recordCollabSplits,
 } from "@/lib/market-store"
 import { createNotification } from "@/lib/notification-store"
 
@@ -52,6 +55,13 @@ export async function POST(
   if (action === "accept") {
     await soldListing(id)
 
+    // Spike 674 (flag-gated): N-way fan-out at accept (dust → first payee, idempotent per offer).
+    let splits: Awaited<ReturnType<typeof recordCollabSplits>> | null = null
+    if (isPhaseCollabSplitsEnabled() && listing.split_payees && listing.split_payees.length > 0) {
+      const computed = computeCollabSplits(offer.amount_phaselq, listing.split_payees)
+      splits = await recordCollabSplits(id, offer.id, computed)
+    }
+
     // phase-140: split proceeds with the original creator on a secondary sale.
     if (isPhase140Enabled()) {
       const split = computeRoyaltySplit(listing, offer.amount_phaselq)
@@ -73,5 +83,5 @@ export async function POST(
       .catch(() => { /* silent */ })
   }
 
-  return NextResponse.json({ ok: true, offer: updated, ...(royalty ? { royalty } : {}) })
+  return NextResponse.json({ ok: true, offer: updated, ...(royalty ? { royalty } : {}), ...(splits ? { splits } : {}) })
 }

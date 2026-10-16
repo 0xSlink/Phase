@@ -202,3 +202,14 @@ export function getCollectionVolumeExcludingWash(
     excludedWashCount: excludedCount,
   }
 }
+
+// ── Spikes 673-675 (flag-gated): per-edition wash context ──
+// Wash screening stays listing-scoped; edition fields are carried for per-edition aggregates
+// without changing the flag-not-block contract.
+export type EditionWashContext = { edition_number?: number; is_artist_proof?: boolean };
+export function washScreenReasonForEdition(ctx: EditionWashContext, baseReason: string | null): string | null {
+  if (!baseReason) return null;
+  if (ctx.is_artist_proof) return `${baseReason}:artist_proof`;
+  if (ctx.edition_number != null) return `${baseReason}:edition_${ctx.edition_number}`;
+  return baseReason;
+}

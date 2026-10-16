@@ -350,3 +350,13 @@ export async function assessWalletSybilRisk(
     return null
   }
 }
+
+// ── Spike 672 (flag-gated): lobby admission hint ──
+// scoreWalletHistory bands are unchanged (suspect<=34, caution<=64); drops deny
+// `suspect` wallets with 429 + Retry-After while humans pass through. Pure.
+export type LobbyAdmission = "admit" | "challenge" | "deny";
+export function lobbyAdmissionForBand(band: "trusted" | "caution" | "suspect"): LobbyAdmission {
+  if (band === "trusted") return "admit";
+  if (band === "caution") return "challenge";
+  return "deny";
+}
