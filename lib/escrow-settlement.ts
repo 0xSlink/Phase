@@ -491,3 +491,20 @@ export function auditEscrowSettlementWiring(): { ok: boolean; note: string } {
     }
   }
 }
+
+// ── Spike 674 (flag-gated): N-way fan-out preview for 2-of-3 escrow outcomes ──
+// Consensus stays single-outcome; on complete, callers fan out via computeCollabSplits.
+// Pure helper, no escrow state change (rollback = flag off, single payee).
+export function previewEscrowFanOut(amount: number, payees: Array<{ wallet: string; bps: number }>): Array<{ wallet: string; amount: number }> {
+  const total = payees.reduce((a, p) => a + p.bps, 0);
+  if (total > 10000) throw new Error("INVALID_SPLIT_PAYEES");
+  let assigned = 0;
+  return payees.map((p, i) => {
+    if (i < payees.length - 1) {
+      const amt = Math.round(amount * (p.bps / 10000) * 1e7) / 1e7;
+      assigned += amt;
+      return { wallet: p.wallet, amount: amt };
+    }
+    return { wallet: p.wallet, amount: Math.round((amount - assigned) * 1e7) / 1e7 };
+  });
+}

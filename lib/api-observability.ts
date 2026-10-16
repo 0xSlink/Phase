@@ -67,3 +67,15 @@ export function createApiRequestContext(request: NextRequest, route: string) {
 
   return { correlationId, log, json, errorJson }
 }
+
+// ── Spikes 672-675: closed event names for new flows (no PII in events) ──
+export const SPIKE_OBSERVABILITY_EVENTS = [
+  "edition.minted",
+  "edition.supply_exhausted",
+  "collab.split_recorded",
+  "drop.ticket_issued",
+  "drop.claim_rejected",
+  "dutch.price_computed",
+  "dutch.quote_stale_rejected",
+] as const;
+export type SpikeObservabilityEvent = (typeof SPIKE_OBSERVABILITY_EVENTS)[number];

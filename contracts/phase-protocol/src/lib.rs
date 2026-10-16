@@ -27,6 +27,11 @@ pub enum PhaseError {
     InvalidApproval = 16,
     /// Lista enumerable del dueño desincronizada (solo debería ocurrir con WASM antiguo sin `OwnerTokenList`).
     InvalidOwnerTokenList = 17,
+    /// Spikes 672-675 (flag-gated off-chain; on-chain guarda invariantes): edición agotada / ventana cerrada / splits inválidos / quote caducado.
+    EditionSupplyExhausted = 18,
+    DropNotLive = 19,
+    InvalidSplitPayees = 20,
+    DutchQuoteStale = 21,
 }
 
 /// Configuración de una colección creada por un usuario (factory).
@@ -94,6 +99,16 @@ pub enum DataKey {
     OperatorForAll(Address, Address),
     /// Orden estable de `token_id` por titular (enumeración estilo ERC-721 `tokenOfOwnerByIndex`).
     OwnerTokenList(Address),
+    /// Spike 673: contador atómico por colección (reserve-or-fail para supply limitada + AP).
+    EditionCounter(u64),
+    /// Spike 673: cap explícito por colección (None = 10_000 legacy).
+    EditionCap(u64),
+    /// Spike 674: payees N-way comprometidos por colección (bps suman <= 10000).
+    SplitPayees(u64),
+    /// Spike 672: ventana de drop (start/end ledger timestamp; None = siempre live).
+    DropWindow(u64),
+    /// Spike 675: (start_price, floor_price, end_timestamp) para Dutch auction.
+    DutchConfig(u64),
 }
 
 /// SEP-50: permiso puntual para `transfer_from`.
@@ -1256,6 +1271,113 @@ impl PhaseProtocol {
     /// Alias `u64` para backwards compat.
     pub fn token_metadata_u64(env: Env, token_id: u64) -> Map<Symbol, String> {
         Self::token_metadata(env, token_id as u32)
+    }
+
+    /// Spike 673: reserva atómica de la siguiente edición (falla si el cap está agotado).
+    /// Llamar antes de `initiate_phase` para serializar mints concurrentes bajo supply limitada.
+    pub fn mint_next_edition(env: Env, collection_id: u64) -> Result<u64, PhaseError> {
+        let cap: u64 = env.storage().persistent().get(&DataKey::EditionCap(collection_id)).unwrap_or(10_000u64);
+        let cur: u64 = env.storage().persistent().get(&DataKey::EditionCounter(collection_id)).unwrap_or(0);
+        let next = cur.saturating_add(1);
+        if next > cap {
+            return Err(PhaseError::EditionSupplyExhausted);
+        }
+        env.storage().persistent().set(&DataKey::EditionCounter(collection_id), &next);
+        env.events().publish((Symbol::new(&env, "edition_reserved"), collection_id), next);
+        Ok(next)
+    }
+
+    /// Spike 673: fija el cap de ediciones de una colección (solo creador). None = legacy 10_000.
+    pub fn set_edition_cap(env: Env, creator: Address, collection_id: u64, cap: u64) -> Result<(), PhaseError> {
+        creator.require_auth();
+        let settings: CollectionSettings = env.storage().persistent().get(&DataKey::Collection(collection_id)).ok_or(PhaseError::InvalidCollection)?;
+        if settings.creator != creator {
+            return Err(PhaseError::UnauthorizedApprover);
+        }
+        env.storage().persistent().set(&DataKey::EditionCap(collection_id), &cap);
+        Ok(())
+    }
+
+    /// Spike 674: compromete payees N-way (suma bps <= 10000, máx 20). Solo creador.
+    pub fn set_split_payees(env: Env, creator: Address, collection_id: u64, payees: Vec<(Address, u32)>) -> Result<(), PhaseError> {
+        creator.require_auth();
+        let settings: CollectionSettings = env.storage().persistent().get(&DataKey::Collection(collection_id)).ok_or(PhaseError::InvalidCollection)?;
+        if settings.creator != creator {
+            return Err(PhaseError::UnauthorizedApprover);
+        }
+        if payees.len() > 20 {
+            return Err(PhaseError::InvalidSplitPayees);
+        }
+        let mut total: u32 = 0;
+        let mut i: u32 = 0;
+        while i < payees.len() {
+            let (_, bps) = payees.get(i).unwrap();
+            total = total.saturating_add(bps);
+            i += 1;
+        }
+        if total > 10_000 {
+            return Err(PhaseError::InvalidSplitPayees);
+        }
+        env.storage().persistent().set(&DataKey::SplitPayees(collection_id), &payees);
+        Ok(())
+    }
+
+    /// Spike 672: fija la ventana del drop (timestamps ledger). Solo creador.
+    pub fn set_drop_window(env: Env, creator: Address, collection_id: u64, start_at: u64, end_at: u64) -> Result<(), PhaseError> {
+        creator.require_auth();
+        let settings: CollectionSettings = env.storage().persistent().get(&DataKey::Collection(collection_id)).ok_or(PhaseError::InvalidCollection)?;
+        if settings.creator != creator {
+            return Err(PhaseError::UnauthorizedApprover);
+        }
+        if end_at != 0 && end_at < start_at {
+            return Err(PhaseError::InvalidCollectionMetadata);
+        }
+        env.storage().persistent().set(&DataKey::DropWindow(collection_id), &(start_at, end_at));
+        Ok(())
+    }
+
+    /// Spike 672: gate de ventana — revierte con DropNotLive fuera de [start, end].
+    pub fn assert_drop_live(env: Env, collection_id: u64) -> Result<(), PhaseError> {
+        if let Some((start, end)) = env.storage().persistent().get::<DataKey, (u64, u64)>(&DataKey::DropWindow(collection_id)) {
+            let now = env.ledger().timestamp();
+            if now < start || (end != 0 && now > end) {
+                return Err(PhaseError::DropNotLive);
+            }
+        }
+        Ok(())
+    }
+
+    /// Spike 675: fija config Dutch (start >= floor). Solo creador.
+    pub fn set_dutch_config(env: Env, creator: Address, collection_id: u64, start_price: i128, floor_price: i128, end_at: u64) -> Result<(), PhaseError> {
+        creator.require_auth();
+        let settings: CollectionSettings = env.storage().persistent().get(&DataKey::Collection(collection_id)).ok_or(PhaseError::InvalidCollection)?;
+        if settings.creator != creator {
+            return Err(PhaseError::UnauthorizedApprover);
+        }
+        if start_price < floor_price || floor_price <= 0 {
+            return Err(PhaseError::AmountBelowCollectionPrice);
+        }
+        env.storage().persistent().set(&DataKey::DutchConfig(collection_id), &(start_price, floor_price, end_at));
+        Ok(())
+    }
+
+    /// Spike 675: quote determinista price(t) = max(floor, start - tick*elapsed). Tick lineal por tiempo.
+    pub fn dutch_quote(env: Env, collection_id: u64, start_at: u64) -> Result<i128, PhaseError> {
+        if let Some((start, floor, end)) = env.storage().persistent().get::<DataKey, (i128, i128, u64)>(&DataKey::DutchConfig(collection_id)) {
+            let now = env.ledger().timestamp();
+            if now >= end {
+                return Ok(floor);
+            }
+            if now <= start_at || end <= start_at {
+                return Ok(start);
+            }
+            let elapsed = (now - start_at) as i128;
+            let span = (end - start_at) as i128;
+            let drop = (start - floor) * elapsed / span;
+            let q = start - drop;
+            return Ok(if q < floor { floor } else { q });
+        }
+        Self::required_for_collection(&env, collection_id)
     }
 
     pub fn get_energy_level_bp(env: Env, user: Address, collection_id: u64) -> Option<u32> {

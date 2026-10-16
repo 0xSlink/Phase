@@ -61,3 +61,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
 }
+
+// ── Spike 674 (flag-gated): N-way fan-out happens off-chain at accept/settle time via
+// recordCollabSplits (see lib/market-store.ts). This shim still returns demo-settled; when
+// phase-collab-splits is on, callers attach `split_payees` (sum bps <= 10000, dust → first
+// payee) and idempotency stays txHash-based via markSettlementUsedIfUnused. No payout change
+// when flag off.
