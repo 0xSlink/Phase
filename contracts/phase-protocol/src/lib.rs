@@ -4,6 +4,8 @@ use soroban_sdk::{
     BytesN, Env, Map, String, Symbol, Vec,
 };
 
+mod economy;
+
 /// Errores del protocolo PHASE
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -27,23 +29,29 @@ pub enum PhaseError {
     InvalidApproval = 16,
     /// Lista enumerable del dueño desincronizada (solo debería ocurrir con WASM antiguo sin `OwnerTokenList`).
     InvalidOwnerTokenList = 17,
-    RaffleNotFound = 18,
-    RaffleAlreadyExists = 19,
-    RaffleInvalidParams = 20,
-    RaffleClosed = 21,
-    RaffleAlreadyEntered = 22,
-    RaffleFull = 23,
-    RaffleNotClosed = 24,
-    RaffleRevealExpired = 25,
-    RaffleCommitMismatch = 26,
-    RaffleNotDrawn = 27,
-    RaffleNotAWinner = 28,
-    RaffleClaimWindowClosed = 29,
-    RaffleAlreadyClaimed = 30,
-    RaffleRefundUnavailable = 31,
-    RaffleSelfEntry = 32,
-    /// Colección con rifa activa: el mint directo (`initiate_phase` / `settle`) queda cerrado.
-    RaffleMintGated = 33,
+    // Spikes 694/697/698/699 (see src/economy.rs). Appended only; never renumber.
+    CoinAlreadyRegistered = 18,
+    CoinNotRegistered = 19,
+    CoinNotVerified = 20,
+    RewardAlreadyClaimed = 21,
+    InvalidSplit = 22,
+    TipBelowMinimum = 23,
+    SelfDeal = 24,
+    TipReplay = 25,
+    EndowmentNotFound = 26,
+    NothingToClaim = 27,
+    EndowmentLocked = 28,
+    EndowmentClosed = 29,
+    DisputeOpen = 30,
+    BondNotFound = 31,
+    BondNotActive = 32,
+    BondChallengeOpen = 33,
+    BondLocked = 34,
+    NotAuthorized = 35,
+    InvalidAmount = 36,
+    BondAlreadyPosted = 37,
+    NoOpenChallenge = 38,
+    InvalidSchedule = 39,
 }
 
 /// Configuración de una colección creada por un usuario (factory).
@@ -1834,7 +1842,4 @@ impl PhaseProtocol {
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-    use soroban_sdk::testutils::Address as _;
-}
+mod test;
