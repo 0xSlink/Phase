@@ -202,3 +202,20 @@ export function getCollectionVolumeExcludingWash(
     excludedWashCount: excludedCount,
   }
 }
+
+/**
+ * phase-143: how much a recorded sale may count as a price comp.
+ *
+ * - A wash-flagged sale counts for nothing. The flag was set at write time by
+ *   the same detectors above; pricing consumes the stored flag instead of
+ *   re-running them, so a sale is judged once and every aggregate agrees.
+ * - A sale between two wallets that have traded with each other repeatedly in
+ *   the comp window is halved per repeat. Each such sale passed the circular
+ *   screen on its own, but a pair trading back and forth is exactly how a
+ *   seller would walk a suggested price upward one "legitimate" sale at a time.
+ */
+export function washCompWeight(input: { washFlagged: boolean; repeatPairCount: number }): number {
+  if (input.washFlagged) return 0
+  const repeats = Math.max(0, Math.floor(input.repeatPairCount) - 1)
+  return repeats === 0 ? 1 : 0.5 ** repeats
+}

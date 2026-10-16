@@ -35,6 +35,42 @@ export type SecurityCounterName =
   | "distributor_available_balance_stale"
   | "distributor_pending"
   | "distributor_refill_succeeded"
+  // phase-142: curator exhibitions
+  | "curator_exhibitions_drafted"
+  | "curator_exhibitions_published"
+  | "curator_draft_reused"
+  | "curator_text_fallback"
+  | "curator_citation_rejected"
+  | "curator_owner_cap_applied"
+  | "curator_wash_tokens_excluded"
+  | "curator_owner_unverified_excluded"
+  // phase-143: pricing oracle
+  | "pricing_suggestions_total"
+  | "pricing_insufficient_comps"
+  | "pricing_wash_comps_discounted"
+  | "pricing_self_comps_excluded"
+  | "pricing_outlier_comps_dropped"
+  | "pricing_citation_rejected"
+  | "pricing_outcome_recorded"
+  | "pricing_outcome_replay"
+  // phase-146: moderation pre-screen
+  | "moderation_scored"
+  | "moderation_auto_allow"
+  | "moderation_human_review"
+  | "moderation_auto_hold"
+  | "moderation_classifier_failed"
+  | "moderation_injection_detected"
+  | "moderation_override_agree"
+  | "moderation_override_disagree"
+  | "moderation_appeals"
+  // phase-147: quest arcs
+  | "quest_arcs_generated"
+  | "quest_arcs_rejected_farmable"
+  | "quest_arcs_rejected_identity"
+  | "quest_arcs_superseded"
+  | "quest_arc_steps_claimed"
+  | "quest_arc_claim_unfunded"
+  | "ai_store_version_conflicts"
 
 const counters = new Map<SecurityCounterName, number>()
 
@@ -50,6 +86,9 @@ export const PREVIEW_VERIFY_RESULTS = [
 ] as const
 
 export const WASH_FLAG_REASONS = ["self_trade", "circular", "rapid_flip", "sybil_cluster"] as const
+
+/** phase-146 decision labels; every moderation counter maps from one of these. */
+export const MODERATION_DECISIONS = ["auto_allow", "human_review", "auto_hold"] as const
 
 export function incSecurityCounter(name: SecurityCounterName, by = 1): void {
   counters.set(name, (counters.get(name) ?? 0) + by)
