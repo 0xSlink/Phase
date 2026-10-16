@@ -187,6 +187,31 @@ CREATE INDEX IF NOT EXISTS idx_royalty_payouts_creator
   ON royalty_payouts (creator_wallet, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_royalty_payouts_listing
   ON royalty_payouts (listing_id);
+
+-- Spikes 673-675 (flag-gated, additive): N-way sale splits + timed-drop queue tickets.
+-- Rows are inert when flags are off; no backfill, no behavior change to existing paths.
+CREATE TABLE IF NOT EXISTS sale_splits (
+  id                    TEXT PRIMARY KEY,
+  listing_id            TEXT NOT NULL,
+  offer_id              TEXT NOT NULL,
+  payee_wallet          TEXT NOT NULL,
+  bps                   INTEGER NOT NULL,
+  amount_phaselq        REAL NOT NULL,
+  created_at            INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sale_splits_listing
+  ON sale_splits (listing_id);
+CREATE TABLE IF NOT EXISTS drop_tickets (
+  id              TEXT PRIMARY KEY,
+  collection_id   INTEGER NOT NULL,
+  wallet          TEXT NOT NULL,
+  position        INTEGER NOT NULL,
+  created_at      INTEGER NOT NULL,
+  redeemed_at     INTEGER,
+  UNIQUE (collection_id, wallet)
+);
+CREATE INDEX IF NOT EXISTS idx_drop_tickets_collection
+  ON drop_tickets (collection_id, position);
 `;
 
 // Issue #89 (phase-140): `listings` predates the creator/royalty concept, so
@@ -197,6 +222,20 @@ CREATE INDEX IF NOT EXISTS idx_royalty_payouts_listing
 const LISTING_COLUMNS: Array<{ name: string; ddl: string }> = [
   { name: "creator_wallet", ddl: "creator_wallet TEXT" },
   { name: "royalty_bps", ddl: "royalty_bps INTEGER" },
+  // Spike 673 (phase-editions): per-collection edition numbering. Nullable; NULL = uneditioned legacy row.
+  { name: "edition_number", ddl: "edition_number INTEGER" },
+  { name: "edition_size", ddl: "edition_size INTEGER" },
+  { name: "is_artist_proof", ddl: "is_artist_proof INTEGER NOT NULL DEFAULT 0" },
+  { name: "supply_mode", ddl: "supply_mode TEXT" },
+  // Spike 672 (phase-timed-drops): server-authoritative drop window. NULL = no window (always live).
+  { name: "drop_start_at", ddl: "drop_start_at INTEGER" },
+  { name: "drop_end_at", ddl: "drop_end_at INTEGER" },
+  // Spike 675 (phase-dutch-auction): descending-price primary mint. NULLs = fixed-price legacy row.
+  { name: "dutch_start_price", ddl: "dutch_start_price REAL" },
+  { name: "dutch_floor_price", ddl: "dutch_floor_price REAL" },
+  { name: "dutch_end_at", ddl: "dutch_end_at INTEGER" },
+  // Spike 674 (phase-collab-splits): N-way payee list as JSON (validated at write). NULL = single-creator.
+  { name: "split_payees_json", ddl: "split_payees_json TEXT" },
 ];
 
 function ensureListingColumns(conn: DatabaseSync): void {

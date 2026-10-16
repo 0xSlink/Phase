@@ -194,6 +194,12 @@ export const phaseCopy: Record<
       vaultRpcLoading: string
       vaultRpcEmpty: string
       vaultRpcError: string
+      /** Spikes 672-675 (flag-gated): short badges/labels; hidden when flags off. */
+      editionBadge: string
+      artistProofBadge: string
+      dropCountdownLabel: string
+      dutchPriceLabel: string
+      collabSplitsLabel: string
     }
     studioModal: {
       windowTitle: string
@@ -680,6 +686,11 @@ export const phaseCopy: Record<
       vaultRpcLoading: "Scanning chain…",
       vaultRpcEmpty: "No PHASE NFTs found for this wallet in the scanned id range.",
       vaultRpcError: "Could not load vault (RPC or timeout). Retry later.",
+      editionBadge: "Edition {n}/{total}",
+      artistProofBadge: "Artist Proof",
+      dropCountdownLabel: "Drop starts in {countdown}",
+      dutchPriceLabel: "Dutch price {price}",
+      collabSplitsLabel: "{count} collaborators split revenue",
     },
     studioModal: {
       windowTitle: "PHASE Art Studio",
@@ -1211,6 +1222,11 @@ export const phaseCopy: Record<
       vaultRpcLoading: "Escaneando cadena…",
       vaultRpcEmpty: "No se encontraron NFT PHASE para esta wallet en el rango escaneado.",
       vaultRpcError: "No se pudo cargar la bóveda (RPC o tiempo de espera). Reintentá más tarde.",
+      editionBadge: "Edición {n}/{total}",
+      artistProofBadge: "Prueba de artista",
+      dropCountdownLabel: "El drop empieza en {countdown}",
+      dutchPriceLabel: "Precio holandés {price}",
+      collabSplitsLabel: "{count} colaboradores reparten ingresos",
     },
     studioModal: {
       windowTitle: "PHASE Estudio de arte",

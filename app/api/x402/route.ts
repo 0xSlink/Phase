@@ -153,3 +153,6 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+// ── Spike 674 note: 402 challenge amounts stay REQUIRED_AMOUNT-based; per-payee fan-out is
+// a settle-time concern (see settle/route.ts + recordCollabSplits). No challenge change.

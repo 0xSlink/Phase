@@ -273,3 +273,7 @@ export async function GET() {
     headers: { Allow: "POST" },
   })
 }
+
+// ── Spike 672: drop bursts reuse this proxy bulkhead/timeout path — no timeout change.
+// Retry-After from upstream 429/503 propagates to callers; queue tickets pace Freighter
+// signing so the herd does not amplify into RPC 503s.
