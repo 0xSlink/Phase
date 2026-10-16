@@ -42,3 +42,12 @@ export const costAttributionLedger = {
   getEntries,
   reset: resetCostLedger,
 }
+
+// ── Spikes 672-675 (flag-gated): job-step cost keys for new flows ──
+// charge()/getCost() semantics unchanged; these closed-string keys keep new flows
+// attributable without unbounded label cardinality.
+export const SPIKE_COST_STEPS = ["edition_reserve", "split_fanout", "drop_ticket", "dutch_quote"] as const;
+export type SpikeCostStep = (typeof SPIKE_COST_STEPS)[number];
+export function spikeCostKey(jobId: string, step: SpikeCostStep): string {
+  return `${jobId}:${step}`;
+}

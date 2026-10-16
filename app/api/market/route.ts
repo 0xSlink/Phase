@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { StrKey } from "@stellar/stellar-sdk"
-import { getListings, createListing, isPhase140Enabled } from "@/lib/market-store"
+import { getListings, createListing, isPhase140Enabled, isPhaseEditionsEnabled, isPhaseCollabSplitsEnabled, isPhaseTimedDropsEnabled, isPhaseDutchAuctionEnabled, dropStatusForListing, currentDutchPrice } from "@/lib/market-store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -9,12 +9,16 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const collectionId = searchParams.get("collection")
   const sellerWallet = searchParams.get("seller")
-  const sort = searchParams.get("sort") as "price_asc" | "price_desc" | "newest" | null
+  const sort = searchParams.get("sort") as "price_asc" | "price_desc" | "newest" | "edition_asc" | null
+  const drop = searchParams.get("drop") as "live" | "upcoming" | "ended" | null
+  const excludeAp = searchParams.get("exclude_ap") === "1"
 
   const listings = await getListings({
     collection_id: collectionId ? Number(collectionId) : undefined,
     seller_wallet: sellerWallet ?? undefined,
     sort: sort ?? "newest",
+    drop: drop ?? undefined,
+    exclude_artist_proof: excludeAp || undefined,
   })
   return NextResponse.json({ listings })
 }
@@ -30,6 +34,16 @@ type CreateBody = {
   name?: unknown
   creator_wallet?: unknown
   royalty_bps?: unknown
+  edition_number?: unknown
+  edition_size?: unknown
+  is_artist_proof?: unknown
+  supply_mode?: unknown
+  drop_start_at?: unknown
+  drop_end_at?: unknown
+  dutch_start_price?: unknown
+  dutch_floor_price?: unknown
+  dutch_end_at?: unknown
+  split_payees?: unknown
 }
 
 export async function POST(request: NextRequest) {
@@ -73,17 +87,47 @@ export async function POST(request: NextRequest) {
     royalty_bps = bps
   }
 
-  const listing = await createListing({
-    token_id,
-    collection_id,
-    seller_wallet,
-    price_phaselq,
-    accepts_offers: body.accepts_offers === true,
-    min_offer,
-    image: typeof body.image === "string" ? body.image : undefined,
-    name: typeof body.name === "string" ? body.name : undefined,
-    creator_wallet,
-    royalty_bps,
-  })
-  return NextResponse.json({ listing }, { status: 201 })
+  // Spikes 673-675: optional flag-gated fields; validated in market-store (flag off → 400 via FLAG_DISABLED).
+  const edition_number = typeof body.edition_number === "number" && Number.isInteger(body.edition_number) ? body.edition_number : undefined
+  const edition_size = typeof body.edition_size === "number" && Number.isInteger(body.edition_size) ? body.edition_size : undefined
+  const is_artist_proof = body.is_artist_proof === true ? true : undefined
+  const supply_mode = body.supply_mode === "limited" || body.supply_mode === "open" ? body.supply_mode : undefined
+  const drop_start_at = typeof body.drop_start_at === "number" && Number.isFinite(body.drop_start_at) ? body.drop_start_at : undefined
+  const drop_end_at = typeof body.drop_end_at === "number" && Number.isFinite(body.drop_end_at) ? body.drop_end_at : undefined
+  const dutch_start_price = typeof body.dutch_start_price === "number" && Number.isFinite(body.dutch_start_price) ? body.dutch_start_price : undefined
+  const dutch_floor_price = typeof body.dutch_floor_price === "number" && Number.isFinite(body.dutch_floor_price) ? body.dutch_floor_price : undefined
+  const dutch_end_at = typeof body.dutch_end_at === "number" && Number.isFinite(body.dutch_end_at) ? body.dutch_end_at : undefined
+  const split_payees = Array.isArray(body.split_payees) ? (body.split_payees as Array<{ wallet: string; bps: number }>) : undefined
+
+  try {
+    const listing = await createListing({
+      token_id,
+      collection_id,
+      seller_wallet,
+      price_phaselq,
+      accepts_offers: body.accepts_offers === true,
+      min_offer,
+      image: typeof body.image === "string" ? body.image : undefined,
+      name: typeof body.name === "string" ? body.name : undefined,
+      creator_wallet,
+      royalty_bps,
+      edition_number,
+      edition_size,
+      is_artist_proof,
+      supply_mode,
+      drop_start_at,
+      drop_end_at,
+      dutch_start_price,
+      dutch_floor_price,
+      dutch_end_at,
+      split_payees,
+    })
+    return NextResponse.json({ listing }, { status: 201 })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const code = (e as { code?: string }).code
+    if (code === "FLAG_DISABLED") return NextResponse.json({ error: msg }, { status: 400 })
+    if (code === "VALIDATION_FAILED") return NextResponse.json({ error: msg }, { status: 400 })
+    throw e
+  }
 }
