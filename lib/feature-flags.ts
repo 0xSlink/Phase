@@ -37,6 +37,7 @@
  * - phase-140: royalty enforcement on secondary sales via a creator/seller split
  * - phase-141: CRDT-collaborative lore drafting (Yjs) for signals, with an
  *   audited compare-and-swap commit path (`PUT /api/signals/[id]`)
+ * - phase-668: runnable, CI-tested integration recipes on /docs
  */
 
 export type PhaseFeatureFlag =
@@ -95,10 +96,7 @@ export type PhaseFeatureFlag =
   | "phase-139"
   | "phase-140"
   | "phase-141"
-  | "phase-editions"
-  | "phase-collab-splits"
-  | "phase-timed-drops"
-  | "phase-dutch-auction";
+  | "phase-668";
 
 const FLAG_ENV_MAP: Record<PhaseFeatureFlag, string[]> = {
   "phase-66": ["NEXT_PUBLIC_FEATURE_PHASE_66", "FEATURE_PHASE_66"],
@@ -155,10 +153,7 @@ const FLAG_ENV_MAP: Record<PhaseFeatureFlag, string[]> = {
   "phase-139": ["NEXT_PUBLIC_FEATURE_PHASE_139", "FEATURE_PHASE_139"],
   "phase-140": ["NEXT_PUBLIC_FEATURE_PHASE_140", "FEATURE_PHASE_140"],
   "phase-141": ["NEXT_PUBLIC_FEATURE_PHASE_141", "FEATURE_PHASE_141"],
-  "phase-editions": ["NEXT_PUBLIC_FEATURE_PHASE_EDITIONS", "FEATURE_PHASE_EDITIONS"],
-  "phase-collab-splits": ["NEXT_PUBLIC_FEATURE_PHASE_COLLAB_SPLITS", "FEATURE_PHASE_COLLAB_SPLITS"],
-  "phase-timed-drops": ["NEXT_PUBLIC_FEATURE_PHASE_TIMED_DROPS", "FEATURE_PHASE_TIMED_DROPS"],
-  "phase-dutch-auction": ["NEXT_PUBLIC_FEATURE_PHASE_DUTCH_AUCTION", "FEATURE_PHASE_DUTCH_AUCTION"],
+  "phase-668": ["NEXT_PUBLIC_FEATURE_PHASE_668", "FEATURE_PHASE_668"],
 };
 
 function isTruthy(v: string | undefined): boolean {
@@ -248,10 +243,7 @@ export function getEnabledFeatureFlags(): PhaseFeatureFlag[] {
     "phase-139",
     "phase-140",
     "phase-141",
-    "phase-editions",
-    "phase-collab-splits",
-    "phase-timed-drops",
-    "phase-dutch-auction",
+    "phase-668",
   ];
   // Filtering is evaluated at call time, allowing runtime test overrides.
   return all.filter(isFeatureEnabled)
