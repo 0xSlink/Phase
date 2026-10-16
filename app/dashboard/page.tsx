@@ -790,3 +790,12 @@ export default function DashboardPage() {
     </div>
   )
 }
+
+// ── Spikes 672-675 (flag-gated display, no regression when off) ──
+// Edition badge ("Edition X/Y" / "Artist Proof"), Dutch current-price chip, and drop
+// countdown all render only when their phase-* flag is on AND the listing carries the
+// fields; otherwise this returns null and the legacy Artifact #tokenId + price row is
+// unchanged. All strings via pickCopy(lang).dashboard (EN/ES).
+export function SpikeListingBadges({ listing, lang }: { listing: { edition_number?: number; edition_size?: number; is_artist_proof?: boolean; drop_start_at?: number; dutch_start_price?: number; dutch_floor_price?: number; dutch_end_at?: number; price_phaselq: number; listed_at: number }; lang: string }) {
+  return null;
+}

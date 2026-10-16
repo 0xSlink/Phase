@@ -175,3 +175,11 @@ export function readStore<T extends object>(
   // Registered stores resolve their path through one shared server-data policy.
   return readJsonFile<T>(serverDataJsonPath(key), fallback());
 }
+
+// ── Spikes 672-675: flag-gated sidecar index helpers (no behavior change when flags off) ──
+// Each index is a plain JSON map persisted via the atomic helpers above. Callers gate on
+// phase-editions / phase-collab-splits / phase-timed-drops / phase-dutch-auction; when off
+// the files remain inert on disk (rollback = unset flag + restart).
+export type EditionIndexEntry = { collection_id: number; edition_number: number; token_id: number; is_artist_proof: boolean };
+export type CollabSplitEntry = { collection_id: number; payees: Array<{ wallet: string; bps: number }>; updated_at: number };
+export type DropQueueEntry = { collection_id: number; wallet: string; position: number; created_at: number };

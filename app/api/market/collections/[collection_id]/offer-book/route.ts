@@ -122,3 +122,7 @@ export async function POST(
     return api.errorJson(error, 500, "market.bulk_offer.create_failed")
   }
 }
+
+// ── Spike 673/675: book levels stay price-keyed; edition/dutch-aware sorting is a
+// presentation concern (see GET /api/market?sort=edition_asc + currentDutchPrice).
+// No aggregation change when flags off.
