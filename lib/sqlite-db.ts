@@ -251,6 +251,20 @@ CREATE INDEX IF NOT EXISTS idx_prediction_positions_wallet
 const LISTING_COLUMNS: Array<{ name: string; ddl: string }> = [
   { name: "creator_wallet", ddl: "creator_wallet TEXT" },
   { name: "royalty_bps", ddl: "royalty_bps INTEGER" },
+  // Spike 673 (phase-editions): per-collection edition numbering. Nullable; NULL = uneditioned legacy row.
+  { name: "edition_number", ddl: "edition_number INTEGER" },
+  { name: "edition_size", ddl: "edition_size INTEGER" },
+  { name: "is_artist_proof", ddl: "is_artist_proof INTEGER NOT NULL DEFAULT 0" },
+  { name: "supply_mode", ddl: "supply_mode TEXT" },
+  // Spike 672 (phase-timed-drops): server-authoritative drop window. NULL = no window (always live).
+  { name: "drop_start_at", ddl: "drop_start_at INTEGER" },
+  { name: "drop_end_at", ddl: "drop_end_at INTEGER" },
+  // Spike 675 (phase-dutch-auction): descending-price primary mint. NULLs = fixed-price legacy row.
+  { name: "dutch_start_price", ddl: "dutch_start_price REAL" },
+  { name: "dutch_floor_price", ddl: "dutch_floor_price REAL" },
+  { name: "dutch_end_at", ddl: "dutch_end_at INTEGER" },
+  // Spike 674 (phase-collab-splits): N-way payee list as JSON (validated at write). NULL = single-creator.
+  { name: "split_payees_json", ddl: "split_payees_json TEXT" },
 ];
 
 function ensureListingColumns(conn: DatabaseSync): void {
