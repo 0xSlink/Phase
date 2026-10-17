@@ -9,6 +9,30 @@ import {
   appendModerationAuditEvent,
   getModerationAuditEvents,
 } from "@/lib/moderation-audit"
+import { getLatestForTarget, isModerationTriageEnabled, resolveQueueItem } from "@/lib/moderation-triage"
+
+/**
+ * phase-146: a takedown/restore made here is a human decision about the same
+ * content the AI queue holds, so it closes the queue item too. Otherwise the
+ * item would keep its AI visibility (a restored post could stay hidden) and sit
+ * in the review queue as stale work. Best-effort: a concurrent queue action
+ * wins, and the phase-113 flag already carries this decision.
+ */
+function syncTriageQueue(signalId: string, action: ModerationAction, moderatorWallet: string | null) {
+  if (!isModerationTriageEnabled()) return null
+  const latest = getLatestForTarget("signal", signalId)
+  if (!latest || latest.state === "pending_score") return null
+  try {
+    return resolveQueueItem({
+      id: latest.id,
+      expectedVersion: latest.version,
+      action: action === "takedown" ? "takedown" : "allow",
+      moderatorWallet: moderatorWallet ?? "operator",
+    })
+  } catch {
+    return null
+  }
+}
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -89,6 +113,7 @@ export async function POST(
     if (action === "takedown") {
       const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim() : "Violates community guidelines"
       const signal = await takedownSignal(id, reason)
+      syncTriageQueue(id, action, identity.success ? identity.data.moderator_wallet : null)
       let audit = null
       if (auditEnabled && identity.success) {
         audit = await appendModerationAuditEvent({
@@ -108,6 +133,7 @@ export async function POST(
     }
 
     const signal = await restoreSignal(id)
+    syncTriageQueue(id, action, identity.success ? identity.data.moderator_wallet : null)
     let audit = null
     if (auditEnabled && identity.success) {
       audit = await appendModerationAuditEvent({

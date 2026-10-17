@@ -21,6 +21,12 @@ export type NotificationType =
   | "content_takedown"
   | "royalty_payout"
   | "signal_reaction"
+  // phase-142/146/147
+  | "exhibition_published"
+  | "moderation_hold"
+  | "moderation_appeal_resolved"
+  | "quest_arc_generated"
+  | "quest_arc_completed"
 
 export type Notification = {
   id: string
@@ -490,4 +496,12 @@ export function auditFaucetAnalyticsWiring(): { ok: boolean; note: string } {
   } catch (e) {
     return { ok: false, note: `[phase-53] funnel analytics schema drift (unexpected, report): ${e instanceof Error ? e.message : String(e)}` }
   }
+}
+
+// ── Spikes 672/675 (flag-gated): scheduled-start + price-tick notification types ──
+// Fan-out stays instant + capped at 50/wallet; drops enqueue a start dispatch and dutch
+// sends tick updates only to watchers. Types only — no dispatch change when flags off.
+export type SpikeNotificationKind = "drop_started" | "drop_queue_position" | "dutch_tick";
+export function spikeNotificationType(kind: SpikeNotificationKind): string {
+  return kind;
 }

@@ -183,6 +183,10 @@ settlement verifier and must not accept unsigned base64 payloads.
 | `phase-139` | `GET/POST /api/market/collections/[collection_id]/offer-book` | `GET` aggregates every pending offer across a collection's active listings into price levels (best price first); `POST` fans a single buyer intent into up to 20 per-listing offers, reporting `created`/`skipped` | `404` disabled; per-listing `/api/market/[id]/offers` unaffected |
 | `phase-140` | `POST /api/market/route.ts` (listing create) & `POST /api/market/[id]/offers/[offer_id]` (accept) | Listing create accepts `creator_wallet`/`royalty_bps`; accepting an offer on a secondary sale (`creator_wallet !== seller_wallet`) computes and ledgers a creator/seller split, returned as `royalty` on the accept response | Listing create ignores the fields; accept pays 100% to seller as before |
 | `phase-141` | `GET/POST /api/signals/[id]/crdt` & `PUT /api/signals/[id]` | Yjs CRDT collaborative draft for signal lore: automatic merge of concurrent edits, exposed as an `enabled` draft panel on the signal page. `PUT` with `from_draft: true` promotes a merged draft through the normal CAS commit and snapshots the pre-edit text | `404` disabled, no draft panel; `PUT` still works on its own as an `If-Match`-guarded full replacement |
+| `phase-142` | `GET/POST /api/exhibitions`, `GET/PATCH /api/exhibitions/[id]` | `POST` (operator) drafts a show (`theme?`, `collection_ids?`, `lang`, `max_works`): `201` new, `200` reused draft for an identical selection, `422 INSUFFICIENT_CANDIDATES`. `PATCH` (operator, `If-Match`) `publish` / `rotate`; publishing rotates the live show in the same scope and notifies hung owners. `GET` is public for published/rotated, operator-only for drafts | `404` |
+| `phase-143` | `POST /api/market/price-suggestion`, `GET …/stats`; `POST /api/market` (`suggestion_id`); offer-accept; `GET …/offer-book` | Suggestion with band, net-of-royalty proceeds, cited comps and rationale; `201` treatment/control (`suggestion: null` for control), `200` + `code: INSUFFICIENT_COMPS` on a thin market. Listing POST records the outcome once and may return an advisory `price_warning`; accept stamps time-to-sale; offer book adds `priceBand` | `404`; listing POST and offer book unchanged |
+| `phase-146` | `POST /api/signals`, replies, `PATCH/PUT /api/signals/[id]`; `GET /api/moderation/queue`, `POST …/drain`, `POST …/[id]`, `POST …/[id]/appeal` | Every new revision is enqueued and scored after the response; held content is filtered from lists and redacted in `GET /api/signals/[id]` (`moderation_hold`). Operator queue (most urgent first, `sla_breached`), lease-safe drain, moderator `claim`/`allow`/`takedown` with `If-Match` + wallet signature, one signed appeal per hold | No screening, no filtering; queue routes `404` |
+| `phase-147` | `GET/POST /api/quests/arcs`; `POST /api/faucet` (`reward: arc:<uuid>:<n>`); `GET/DELETE /api/admin/quests` | Signed generate (`409` active, `429` window, `422` no eligible steps / farmable, `503` treasury, `403` identity); `GET` refreshes progress lazily. Faucet pays an arc step only to its owner, in order, reserving against the distributor ledger first. Admin `GET` adds `arcCatalog`; `DELETE ?arcId=` revokes | `404`; `arc:*` rewards parse as `genesis` (pre-147 fallback) |
 
 ### 5.3 Signal concurrency contract
 
@@ -413,6 +417,17 @@ NEXT_PUBLIC_FEATURE_PHASE_153=1
 # Server-only aliases also accepted: FEATURE_PHASE_104, etc.
 ```
 
+Agent tuning (all optional, server-only):
+
+| Variable | Default | Used by |
+|---|---|---|
+| `PHASE_ADMIN_KEY` | unset → operator routes `503` | phase-142/143/146/147 operator routes (`x-admin-key`) |
+| `PHASE_AI_JSON_TIMEOUT_MS` | `20000` | structured model step |
+| `PHASE_AI_COST_PER_1K_INPUT_CHARS` / `…_OUTPUT_CHARS` | `0.00002` / `0.00008` | cost attribution ledger |
+| `PHASE_PRICING_CONTROL_PCT` | `10` | pricing A/B control share |
+| `PHASE_MODERATION_HOLD_UNSCORED` | unset | `1` hides new content until scored |
+| `PHASE_QUEST_ARC_MAX_STROOPS` | `150000000` (15 PHASELQ) | per-arc reward cap |
+
 Rollback: unset the var or set `0` and restart. No ledger migration to revert; off-chain stores remain but are ignored when flag off. See `PROJECT_ARCHITECTURE.md` §10.
 
 ---
@@ -567,3 +582,52 @@ XLM, and draining it below the transaction fee strands every later settlement.
 A failed refill **must** release its hold; a refill still pending after the poll
 window **keeps** it, since releasing it would let a concurrent refill authorise
 against funds the pending transaction is about to consume.
+
+## 14. AI agents (phase-142, 143, 146, 147)
+
+The four agents share one rule: **the model never makes a decision that moves
+money, visibility or ranking.** Each computes its decision deterministically,
+asks the model (`generateJsonStep`, JSON mode, provider-default safety) only
+for words or category scores, validates the reply against ids it already holds,
+and falls back to `pickCopy` templates. Every model call is charged once per
+job in the cost ledger (`chargeAiStep`, closed step labels) and every outcome
+moves a closed-label counter in `lib/security-counters.ts`.
+
+| Agent | Deterministic core | Model's job | Validation | Store |
+|---|---|---|---|---|
+| Curator (142) | BM25 retrieval, theme induction, MMR hang order, owner cap (25%), wash exclusion (30d), unverified owners excluded | title, statement, wall text | one wall per hung token, no unknown `#id`, length budgets | `exhibitions` |
+| Pricing (143) | weighted median/p25/p75 over decayed, wash-discounted, self-excluded, outlier-trimmed comps; token → collection → global; live-bid floor; royalty net | rationale sentence | cited offer ids ⊆ comps, every number ⊆ given numbers | `price_suggestions` |
+| Moderation (146) | local pre-screen (spam, EN/ES injection), per-category thresholds + fail mode, calibration table | category scores | all 7 categories present, each in [0,1]; injection floor cannot be cleared | `moderation_queue` |
+| Quest arcs (147) | closed step catalog over quest-registry evaluators, ramped plan, treasury-sized rewards, farmability review | title, step flavour text | every step index present, no numbers except targets | `quest_arcs` |
+
+**Clocks.** Exhibitions, suggestions, queue items and arcs are all
+version-guarded SQLite rows (`WHERE id = ? AND version = ?`), with
+`BEGIN IMMEDIATE` wherever a check spans rows (publish-rotates-live, draft
+re-check, arc supersede). Wall-clock expiry is lazy and explicit: suggestions
+(24h TTL, checked at outcome time), arcs (14d, written as `expired` on read,
+earned steps stay claimable), arc claims (8 min, matching
+`FAUCET_PENDING_TTL_MS`), queue leases (60s scoring, 15 min assignment).
+Comps use `offers.decided_at` (new, additive) rather than `created_at`, and
+treat `pending` offers past `expires_at` as expired without a write.
+
+**Serverless.** Nothing new blocks a hot path. Signal/reply creation does a
+regex pre-screen and one `INSERT OR IGNORE`; scoring runs after the response,
+and `POST /api/moderation/queue/drain` recovers anything a frozen instance
+dropped. Curator owner lookups reuse the phase-135 owner cache and fetch only
+the shortlist (≤40, concurrency 5), never the full explore scan. The curator's
+model input is bounded by `MAX_WORKS × 280` chars regardless of corpus size,
+and a retried draft reuses the stored row instead of calling the model again.
+
+**Arc claims and the faucet.** `arc:<uuid>:<n>` only parses while phase-147 is
+on. Before submitting, the faucet checks the arc belongs to the claimant,
+refreshes progress, reserves the amount with `reserveFunds` (when the
+distributor ledger tracks the signer) and moves the step `done → claiming`.
+Success commits the hold and moves `claiming → claimed`; failure before
+submission releases the hold and reverts to `done`. After submission the step
+stays `claiming` and restarts only after the pending TTL — the same
+double-payout window the faucet already accepts for every reward, documented
+rather than widened.
+
+Per-file rulings for each issue's affected-file list are in
+`docs/spikes/142-curator-exhibitions.md`, `143-pricing-oracle.md`,
+`146-moderation-triage.md` and `147-quest-arcs.md`.

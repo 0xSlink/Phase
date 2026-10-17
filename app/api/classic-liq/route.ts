@@ -12,7 +12,12 @@ import {
   StrKey,
   TransactionBuilder,
 } from "@stellar/stellar-sdk"
-import { readClassicWalletStatus, type ClassicLiqAsset, type ClassicLiqWalletStatus } from "@/lib/classic-liq"
+import {
+  horizonTransactionResultCode,
+  readClassicWalletStatus,
+  type ClassicLiqAsset,
+  type ClassicLiqWalletStatus,
+} from "@/lib/classic-liq"
 import {
   ensureTrustlineBeforeClassicPayment,
   logHorizonSubmitError,
@@ -201,7 +206,7 @@ export async function POST(req: NextRequest) {
   const status = await walletStatus(wallet, config.asset)
   if (!status.accountExists) {
     return NextResponse.json(
-      { error: "Wallet account not found on testnet. Fund account with Friendbot first." },
+      { error: "Wallet account not found on testnet. Fund account with Friendbot first.", code: "account_missing" },
       { status: 412 },
     )
   }
@@ -258,7 +263,7 @@ export async function POST(req: NextRequest) {
     await releaseClassicFundClaim(wallet)
     logHorizonSubmitError("classic-liq POST payment", e)
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e), asset: config.asset },
+      { error: e instanceof Error ? e.message : String(e), code: horizonTransactionResultCode(e), asset: config.asset },
       { status: 502 },
     )
   }

@@ -58,3 +58,9 @@ export async function withHorizonBulkhead<T>(operation: () => Promise<T>): Promi
     release()
   }
 }
+
+// ── Spike 672: admission note — timed-drop bursts reuse withHorizonBulkhead (limit 5)
+// so thundering-herd mint traffic queues instead of saturating Horizon. No limit change.
+export function spikeBulkheadNote(): string {
+  return "drop mint traffic must go through withHorizonBulkhead; never raise HORIZON_BULKHEAD_LIMIT for drops";
+}

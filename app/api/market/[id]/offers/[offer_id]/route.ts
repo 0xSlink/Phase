@@ -8,8 +8,12 @@ import {
   isPhase140Enabled,
   computeRoyaltySplit,
   recordRoyaltyPayout,
+  isPhaseCollabSplitsEnabled,
+  computeCollabSplits,
+  recordCollabSplits,
 } from "@/lib/market-store"
 import { createNotification } from "@/lib/notification-store"
+import { isPricingOracleEnabled, markSuggestionSold } from "@/lib/pricing-oracle"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -52,6 +56,15 @@ export async function POST(
   if (action === "accept") {
     await soldListing(id)
 
+    // phase-143: time-to-sale for the suggestion this listing was priced from.
+    if (isPricingOracleEnabled()) {
+      try {
+        markSuggestionSold(id)
+      } catch (error) {
+        console.warn("[phase-143] time-to-sale not stamped:", error)
+      }
+    }
+
     // phase-140: split proceeds with the original creator on a secondary sale.
     if (isPhase140Enabled()) {
       const split = computeRoyaltySplit(listing, offer.amount_phaselq)
@@ -73,5 +86,5 @@ export async function POST(
       .catch(() => { /* silent */ })
   }
 
-  return NextResponse.json({ ok: true, offer: updated, ...(royalty ? { royalty } : {}) })
+  return NextResponse.json({ ok: true, offer: updated, ...(royalty ? { royalty } : {}), ...(splits ? { splits } : {}) })
 }

@@ -59,6 +59,9 @@ export const PREVIEW_VERIFY_RESULTS = [
 
 export const WASH_FLAG_REASONS = ["self_trade", "circular", "rapid_flip", "sybil_cluster"] as const
 
+/** phase-146 decision labels; every moderation counter maps from one of these. */
+export const MODERATION_DECISIONS = ["auto_allow", "human_review", "auto_hold"] as const
+
 export function incSecurityCounter(name: SecurityCounterName, by = 1): void {
   counters.set(name, (counters.get(name) ?? 0) + by)
 }
