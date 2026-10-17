@@ -47,6 +47,20 @@ import {
 import { assessWalletSybilRisk, isSybilResistanceEnabled } from "@/lib/sybil-resistance"
 import { isWalletDenied } from "@/lib/faucet-deny-list"
 import { verifyTurnstileToken, turnstileSiteKeyConfigured } from "@/lib/faucet-turnstile"
+import {
+  abortStepClaim,
+  beginStepClaim,
+  completeStepClaim,
+  defaultArcDeps,
+  getArc,
+  isQuestArcsEnabled,
+  parseArcRewardId,
+  refreshArc,
+  stepClaimable,
+} from "@/lib/quest-arcs"
+import { commitRefill, readLedger, releaseRefill, reserveFunds } from "@/lib/distributor-ledger"
+import { incSecurityCounter } from "@/lib/security-counters"
+import { createNotification } from "@/lib/notification-store"
 
 /** Vercel: Hobby ~10s; Pro/Enterprise permite más — subir si el faucet sigue en 504. */
 export const maxDuration = 60
@@ -113,6 +127,8 @@ type RewardStatus = {
 async function parseRewardType(input: unknown): Promise<RewardType> {
   const value = typeof input === "string" ? input.trim().toLowerCase() : ""
   if (value === "genesis" || value === "daily") return value
+  // phase-147: `arc:<uuid>:<step>` only parses while the flag is on.
+  if (isQuestArcsEnabled() && parseArcRewardId(value)) return value
   
   // Check if it's a valid quest ID from the registry
   const registry = await getQuestRegistry()
@@ -198,6 +214,8 @@ function serverTokenContractId(): string {
 async function rewardAmountStroops(reward: RewardType): Promise<string> {
   if (reward === "genesis") return PHASER_FAUCET_MINT_STROOPS
   if (reward === "daily") return DAILY_REWARD_STROOPS
+  const arcRef = parseArcRewardId(reward)
+  if (arcRef) return getArc(arcRef.arcId)?.steps[arcRef.index]?.reward_stroops ?? "0"
   
   // Get reward from quest registry
   const registry = await getQuestRegistry()
@@ -228,6 +246,19 @@ async function claimStatusForReward(claim: WalletClaims, reward: RewardType, now
       claimedAt: last || null,
       nextAt: claimable ? null : last + DAILY_WINDOW_MS,
       amountStroops: await rewardAmountStroops("daily"),
+    }
+  }
+
+  // phase-147: arc step claim state lives on the arc row, not in faucet-claims.json.
+  const arcRef = parseArcRewardId(reward)
+  if (arcRef) {
+    const arc = getArc(arcRef.arcId)
+    const step = arc?.steps[arcRef.index]
+    return {
+      claimable: Boolean(arc && step && stepClaimable(arc, arcRef.index, now)),
+      claimedAt: step?.claimed_at ?? null,
+      nextAt: null,
+      amountStroops: step?.reward_stroops ?? "0",
     }
   }
 
@@ -323,7 +354,30 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(await buildWalletStatus(wallet, claims))
 }
 
-async function markClaim(wallet: string, reward: RewardType) {
+/**
+ * phase-147: second phase of an arc step claim, once the payout tx landed.
+ * Idempotent for a re-polled pending hash (completeStepClaim returns early).
+ */
+async function settleArcClaim(wallet: string, reward: RewardType, txHash: string) {
+  const ref = parseArcRewardId(reward)
+  if (!ref) return
+  const { arc, completedNow, holdId } = completeStepClaim(ref.arcId, ref.index, txHash)
+  if (holdId) commitRefill(holdId, txHash)
+  if (completedNow) {
+    void createNotification(wallet, "quest_arc_completed", { arc_id: arc.id, title: arc.title }).catch(() => {})
+  }
+}
+
+/** phase-147: failure path — the step returns to `done` and its treasury hold is released. */
+function abortArcClaim(reward: RewardType) {
+  const ref = parseArcRewardId(reward)
+  if (!ref) return
+  const holdId = abortStepClaim(ref.arcId, ref.index)
+  if (holdId) releaseRefill(holdId)
+}
+
+async function markClaim(wallet: string, reward: RewardType, txHash?: string) {
+  if (txHash) await settleArcClaim(wallet, reward, txHash)
   questProgressCache.delete(wallet)
   const claims = await readClaims()
   const walletClaim = claims[wallet] ?? {}
@@ -578,6 +632,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // phase-147: an arc step pays only its owner, in order, once its condition holds.
+  const arcRef = parseArcRewardId(reward)
+  if (arcRef) {
+    const arc = getArc(arcRef.arcId)
+    if (!arc || arc.wallet !== userAddress.toUpperCase()) {
+      return NextResponse.json({ error: "Arc not found for this wallet.", code: "ARC_NOT_FOUND", reward }, { status: 404 })
+    }
+    const refreshed = await refreshArc(arc.id, defaultArcDeps()).catch(() => null)
+    const current = refreshed?.arc ?? arc
+    const step = current.steps[arcRef.index]
+    if (!step || (step.state !== "claiming" && !stepClaimable(current, arcRef.index))) {
+      return NextResponse.json(
+        { error: "Arc step not claimable yet.", code: "ARC_STEP_NOT_CLAIMABLE", reward, stepState: step?.state ?? null },
+        { status: 412 },
+      )
+    }
+  }
+
   // phase-132: validate referral code early (before mint) to fail fast
   if (reward === "genesis" && body.referralCode && isReferralQuestEnabled()) {
     const refValidation = await validateReferralCode(body.referralCode, userAddress)
@@ -724,6 +796,9 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // phase-147: once a payout is submitted it may still land, so an arc step must
+  // stay `claiming` (and restart only after the pending TTL) rather than revert.
+  let payoutSubmitted = false
   try {
     // phase-133: auto-top-up distributor if balance is low (fire-and-forget, non-blocking)
     if (isDistributorTopupEnabled() && useTransfer) {
@@ -748,7 +823,7 @@ export async function POST(req: NextRequest) {
       const pendingHash = row.faucetPending.hash
       const out = await pollSubmittedMint(server, pendingHash)
       if (out.outcome === "SUCCESS") {
-        await markClaim(userAddress, reward)
+        await markClaim(userAddress, reward, pendingHash)
         let streakInfo: StreakInfo | undefined
         if (reward === "daily") {
           const recorded = await recordDailyClaim(userAddress)
@@ -771,6 +846,7 @@ export async function POST(req: NextRequest) {
       }
       if (out.outcome === "FAILED") {
         await clearFaucetPendingOnly(userAddress)
+        abortArcClaim(reward)
         return faucetMintLedgerFailedResponse(pendingHash, out.failed)
       }
       return NextResponse.json(
@@ -799,10 +875,38 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // phase-147: phase one of an arc step claim. When the distributor ledger
+    // tracks this signer, the payout is reserved against its available balance
+    // first, so concurrent arc claims cannot promise more than the treasury
+    // holds. From here every failure exit must call abortArcClaim.
+    if (arcRef) {
+      const amount = await rewardAmountStroops(reward)
+      let holdId: string | null = null
+      if (useTransfer && readLedger(source)) {
+        const hold = reserveFunds({ distributor: source, amountStroops: amount, purpose: "quest_arc" })
+        if (!hold.ok) {
+          incSecurityCounter("quest_arc_claim_unfunded")
+          return NextResponse.json(
+            { error: "Treasury cannot cover this reward right now.", code: "ARC_TREASURY_LOW", reward },
+            { status: 503 },
+          )
+        }
+        holdId = hold.holdId
+      }
+      try {
+        const begun = beginStepClaim(arcRef.arcId, arcRef.index, holdId)
+        if (begun.staleHoldId) releaseRefill(begun.staleHoldId)
+      } catch {
+        if (holdId) releaseRefill(holdId)
+        return NextResponse.json({ error: "Arc step not claimable.", code: "ARC_STEP_NOT_CLAIMABLE", reward }, { status: 409 })
+      }
+    }
+
     let account: Awaited<ReturnType<typeof server.getAccount>>
     try {
       account = await server.getAccount(source)
     } catch (e) {
+      abortArcClaim(reward)
       const msg = e instanceof Error ? e.message : String(e)
       if (/not found/i.test(msg)) {
         return NextResponse.json(
@@ -851,6 +955,7 @@ export async function POST(req: NextRequest) {
     prepared.sign(signerKp)
     const send = await server.sendTransaction(prepared)
     if (send.status === "ERROR") {
+      abortArcClaim(reward)
       const err = (send as { errorResult?: unknown }).errorResult
       return NextResponse.json(
         { error: "RPC rechazó la transacción.", detail: String(err ?? send) },
@@ -858,6 +963,7 @@ export async function POST(req: NextRequest) {
       )
     }
     const hash = send.hash as string
+    payoutSubmitted = true
 
     liveClaims = await readClaims()
     liveClaims[userAddress] = {
@@ -868,7 +974,7 @@ export async function POST(req: NextRequest) {
 
     const out = await pollSubmittedMint(server, hash)
     if (out.outcome === "SUCCESS") {
-      await markClaim(userAddress, reward)
+      await markClaim(userAddress, reward, hash)
       let streakInfo: StreakInfo | undefined
       if (reward === "daily") {
         const recorded = await recordDailyClaim(userAddress)
@@ -891,6 +997,7 @@ export async function POST(req: NextRequest) {
     }
     if (out.outcome === "FAILED") {
       await clearFaucetPendingOnly(userAddress)
+      abortArcClaim(reward)
       return faucetMintLedgerFailedResponse(hash, out.failed)
     }
     return NextResponse.json(
@@ -905,6 +1012,7 @@ export async function POST(req: NextRequest) {
       { status: 202 },
     )
   } catch (e) {
+    if (!payoutSubmitted) abortArcClaim(reward)
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: msg }, { status: 502 })
   }

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { StrKey } from "@stellar/stellar-sdk"
-import { getListings, createListing, isPhase140Enabled, isPhaseEditionsEnabled, isPhaseCollabSplitsEnabled, isPhaseTimedDropsEnabled, isPhaseDutchAuctionEnabled, dropStatusForListing, currentDutchPrice } from "@/lib/market-store"
+import { getListings, createListing, isPhase140Enabled } from "@/lib/market-store"
+import {
+  getSuggestionBand,
+  isPricingOracleEnabled,
+  priceWarningFor,
+  recordSuggestionOutcome,
+} from "@/lib/pricing-oracle"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -34,16 +40,8 @@ type CreateBody = {
   name?: unknown
   creator_wallet?: unknown
   royalty_bps?: unknown
-  edition_number?: unknown
-  edition_size?: unknown
-  is_artist_proof?: unknown
-  supply_mode?: unknown
-  drop_start_at?: unknown
-  drop_end_at?: unknown
-  dutch_start_price?: unknown
-  dutch_floor_price?: unknown
-  dutch_end_at?: unknown
-  split_payees?: unknown
+  suggestion_id?: unknown
+  lang?: unknown
 }
 
 export async function POST(request: NextRequest) {
@@ -87,47 +85,43 @@ export async function POST(request: NextRequest) {
     royalty_bps = bps
   }
 
-  // Spikes 673-675: optional flag-gated fields; validated in market-store (flag off → 400 via FLAG_DISABLED).
-  const edition_number = typeof body.edition_number === "number" && Number.isInteger(body.edition_number) ? body.edition_number : undefined
-  const edition_size = typeof body.edition_size === "number" && Number.isInteger(body.edition_size) ? body.edition_size : undefined
-  const is_artist_proof = body.is_artist_proof === true ? true : undefined
-  const supply_mode = body.supply_mode === "limited" || body.supply_mode === "open" ? body.supply_mode : undefined
-  const drop_start_at = typeof body.drop_start_at === "number" && Number.isFinite(body.drop_start_at) ? body.drop_start_at : undefined
-  const drop_end_at = typeof body.drop_end_at === "number" && Number.isFinite(body.drop_end_at) ? body.drop_end_at : undefined
-  const dutch_start_price = typeof body.dutch_start_price === "number" && Number.isFinite(body.dutch_start_price) ? body.dutch_start_price : undefined
-  const dutch_floor_price = typeof body.dutch_floor_price === "number" && Number.isFinite(body.dutch_floor_price) ? body.dutch_floor_price : undefined
-  const dutch_end_at = typeof body.dutch_end_at === "number" && Number.isFinite(body.dutch_end_at) ? body.dutch_end_at : undefined
-  const split_payees = Array.isArray(body.split_payees) ? (body.split_payees as Array<{ wallet: string; bps: number }>) : undefined
+  const listing = await createListing({
+    token_id,
+    collection_id,
+    seller_wallet,
+    price_phaselq,
+    accepts_offers: body.accepts_offers === true,
+    min_offer,
+    image: typeof body.image === "string" ? body.image : undefined,
+    name: typeof body.name === "string" ? body.name : undefined,
+    creator_wallet,
+    royalty_bps,
+  })
 
-  try {
-    const listing = await createListing({
-      token_id,
-      collection_id,
-      seller_wallet,
-      price_phaselq,
-      accepts_offers: body.accepts_offers === true,
-      min_offer,
-      image: typeof body.image === "string" ? body.image : undefined,
-      name: typeof body.name === "string" ? body.name : undefined,
-      creator_wallet,
-      royalty_bps,
-      edition_number,
-      edition_size,
-      is_artist_proof,
-      supply_mode,
-      drop_start_at,
-      drop_end_at,
-      dutch_start_price,
-      dutch_floor_price,
-      dutch_end_at,
-      split_payees,
-    })
-    return NextResponse.json({ listing }, { status: 201 })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    const code = (e as { code?: string }).code
-    if (code === "FLAG_DISABLED") return NextResponse.json({ error: msg }, { status: 400 })
-    if (code === "VALIDATION_FAILED") return NextResponse.json({ error: msg }, { status: 400 })
-    throw e
+  // phase-143: close the loop on a shown suggestion. Recorded after the listing
+  // exists and never able to fail it — the listing is the user's action, the
+  // outcome is measurement. The price warning is advisory only.
+  let price_suggestion: ReturnType<typeof recordSuggestionOutcome> | undefined
+  let price_warning: string | null = null
+  if (isPricingOracleEnabled() && typeof body.suggestion_id === "string" && body.suggestion_id.trim()) {
+    const suggestionId = body.suggestion_id.trim()
+    try {
+      price_suggestion = recordSuggestionOutcome({
+        suggestionId,
+        sellerWallet: seller_wallet,
+        collectionId: collection_id,
+        listingId: listing.id,
+        listedPrice: price_phaselq,
+      })
+      const band = getSuggestionBand(suggestionId)
+      if (band) price_warning = priceWarningFor(price_phaselq, band, body.lang === "es" ? "es" : "en")
+    } catch (error) {
+      console.warn("[phase-143] suggestion outcome not recorded:", error)
+    }
   }
+
+  return NextResponse.json(
+    { listing, ...(price_suggestion ? { price_suggestion, price_warning } : {}) },
+    { status: 201 },
+  )
 }

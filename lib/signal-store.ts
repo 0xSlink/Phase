@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getDb } from "@/lib/sqlite-db";
 import { recordSignalVersionConflict } from "@/lib/signal-version-metrics";
+import { getLatestForTarget, hiddenTargetFilterSql, isModerationTriageEnabled } from "@/lib/moderation-triage";
 
 export type MediaAttachment = {
   ipfs_cid: string;
@@ -213,6 +214,11 @@ export async function getSignals(
   if (isModerationEnabled()) {
     conditions.push("taken_down = 0");
   }
+  // phase-146: an AI hold hides the signal from every listing until a human
+  // resolves it. The row itself is untouched, so rollback restores the list.
+  if (isModerationTriageEnabled()) {
+    conditions.push(hiddenTargetFilterSql("signal", "signals.id"));
+  }
   if (channel && channel !== "all") {
     conditions.push("channel = ?");
     params.push(channel);
@@ -422,12 +428,40 @@ export async function upvoteSignal(
 }
 
 export async function getReplies(signal_id: string): Promise<SignalReply[]> {
+  const hidden = isModerationTriageEnabled()
+    ? ` AND ${hiddenTargetFilterSql("reply", "signal_replies.id")}`
+    : "";
   const rows = getDb()
     .prepare(
-      "SELECT * FROM signal_replies WHERE signal_id = ? ORDER BY created_at ASC",
+      `SELECT * FROM signal_replies WHERE signal_id = ?${hidden} ORDER BY created_at ASC`,
     )
     .all(signal_id) as ReplyRow[];
   return rows.map(rowToReply);
+}
+
+export type SignalModerationHold = { queue_id: string; appealable: boolean };
+
+/**
+ * phase-146: the display view of a signal. A held signal keeps its id, author
+ * and version (so its author can find it and appeal) but loses every field that
+ * carries the held content. Use this wherever a signal is rendered; editing
+ * paths keep reading the raw row.
+ */
+export function withModerationView(
+  signal: Signal,
+): Signal & { moderation_hold?: SignalModerationHold } {
+  if (!isModerationTriageEnabled()) return signal;
+  const latest = getLatestForTarget("signal", signal.id);
+  if (!latest || latest.visibility !== "hidden") return signal;
+  return {
+    ...signal,
+    title: "",
+    body: "",
+    nft_image: undefined,
+    media: undefined,
+    poll: undefined,
+    moderation_hold: { queue_id: latest.id, appealable: latest.appealed_at === null },
+  };
 }
 
 /**

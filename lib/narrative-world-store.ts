@@ -519,3 +519,31 @@ export async function getAllNarrativesWithTokenIds(): Promise<
   }))
 }
 
+
+// ─── phase-142: bounded lore corpus for the curator ─────────────────────────
+// The curator selects from lore, not from the on-chain token scan: a token
+// without a narrative has nothing to theme on, so scanning owner_of for every
+// token (what /api/explore does) would cost RPC for documents that can never be
+// hung. This reads the sidecar once and returns at most `limit` documents,
+// newest first, optionally restricted to a set of collections.
+
+export const CURATOR_CORPUS_MAX = 2000
+
+export async function getNarrativeCorpus(
+  opts: { limit?: number; collectionIds?: number[] } = {},
+): Promise<Array<{ tokenId: number; narrative: string; collectionId: number; generatedAt: number }>> {
+  const limit = Math.min(CURATOR_CORPUS_MAX, Math.max(1, Math.floor(opts.limit ?? CURATOR_CORPUS_MAX)))
+  const only = opts.collectionIds && opts.collectionIds.length > 0 ? new Set(opts.collectionIds) : null
+  const store = await readJsonStore<WorldNarrativesStore>(serverDataJsonPath("worldNarratives"))
+  return Object.entries(store)
+    .filter(([, data]) => typeof data?.narrative === "string" && data.narrative.trim().length > 0)
+    .filter(([, data]) => !only || only.has(data.collection_id))
+    .map(([tokenId, data]) => ({
+      tokenId: Number(tokenId),
+      narrative: data.narrative,
+      collectionId: data.collection_id,
+      generatedAt: data.generated_at,
+    }))
+    .sort((a, b) => b.generatedAt - a.generatedAt || a.tokenId - b.tokenId)
+    .slice(0, limit)
+}
