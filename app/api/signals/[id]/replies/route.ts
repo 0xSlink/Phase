@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { isModerationTriageEnabled, screenInBackground } from "@/lib/moderation-triage"
 import { StrKey } from "@stellar/stellar-sdk"
 import {
   getSignal,
@@ -249,6 +250,18 @@ export async function POST(
       },
       parentVersion,
     )
+
+    // phase-146: replies are screened like signals.
+    if (isModerationTriageEnabled()) {
+      screenInBackground({
+        targetKind: "reply",
+        targetId: reply.id,
+        authorWallet: walletStr,
+        title: "",
+        body: reply.body,
+        hasMedia: false,
+      })
+    }
 
     // phase-116: record contributor attribution (flag-gated, best-effort)
     let creditLedger: Awaited<ReturnType<typeof computeCreditLedger>> | null = null

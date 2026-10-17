@@ -107,6 +107,107 @@ export type ArtifactLabelsCopy = {
 }
 
 /** PhaseError 1..13; índice 0 sin usar. Misma lista para forja y cámara. */
+/** phase-142: curator exhibitions. `{…}` placeholders are filled by the caller. */
+export type CuratorCopy = {
+  sectionTitle: string
+  statementLabel: string
+  coverLabel: string
+  /** Fallback title when the model is unavailable; `{theme}`. */
+  titleFallback: string
+  /** `{theme}`, `{count}` = number of worlds. */
+  statementFallback: string
+  /** `{world}`, `{excerpt}`. */
+  wallTextFallback: string
+  statusDraft: string
+  statusPublished: string
+  statusRotated: string
+  imageUnavailable: string
+  /** Notification to an owner whose work was hung; `{token}`, `{title}`. */
+  notifyPublished: string
+  notifyLabel: string
+  errors: {
+    disabled: string
+    notFound: string
+    insufficientCandidates: string
+    versionConflict: string
+    unauthorized: string
+  }
+}
+
+/** phase-143: pricing oracle. */
+export type PricingCopy = {
+  suggestionTitle: string
+  /** `{low}`, `{high}`. */
+  bandLabel: string
+  /** `{bps_pct}`, `{net}`. */
+  netProceeds: string
+  levels: { token: string; collection: string; global: string }
+  /** `{count}`, `{scope}`, `{median}`. */
+  rationaleFallback: string
+  /** `{count}`. */
+  washNote: string
+  /** `{count}`. */
+  selfSalesNote: string
+  insufficient: string
+  /** `{high}`. */
+  priceWarningHigh: string
+  /** `{low}`. */
+  priceWarningLow: string
+  useSuggestion: string
+}
+
+/** phase-146: moderation pre-screen. */
+export type ModerationQueueCopy = {
+  heldNotice: string
+  underReview: string
+  appealCta: string
+  appealSubmitted: string
+  appealResolvedUpheld: string
+  appealResolvedRestored: string
+  queueTitle: string
+  slaBreached: string
+  decisions: { auto_allow: string; human_review: string; auto_hold: string }
+  /** Stored as the hold reason; shown to the author. */
+  holdReason: string
+  notifyHeld: string
+  notifyLabel: string
+  appealPlaceholder: string
+  appealFailed: string
+}
+
+/** phase-147: quest arcs. */
+export type QuestArcCopy = {
+  sectionTitle: string
+  titleFallback: string
+  stepStates: { locked: string; open: string; done: string; claiming: string; claimed: string }
+  claim: string
+  expired: string
+  superseded: string
+  /** `{title}`. */
+  notifyGenerated: string
+  /** `{title}`. */
+  notifyCompleted: string
+  notifyLabel: string
+  /** One fallback line per step kind; `{target}` where a count applies. */
+  stepFallback: {
+    create_collection: string
+    mint_nft: string
+    settle: string
+    create_world: string
+    collection_count: string
+    daily_streak: string
+    post_signal: string
+  }
+  errors: {
+    disabled: string
+    alreadyActive: string
+    rateLimited: string
+    noEligibleSteps: string
+    treasuryLow: string
+    identityBlocked: string
+  }
+}
+
 const PHASE_HOST_CONTRACT_ERRORS_EN: readonly string[] = [
   "",
   "You already hold a PHASE for this collection (AlreadyPhased).",
@@ -629,6 +730,10 @@ export const phaseCopy: Record<
       logs: ChamberLogsCopy
       artifact: ArtifactLabelsCopy
     }
+    curator: CuratorCopy
+    pricing: PricingCopy
+    moderationQueue: ModerationQueueCopy
+    questArcs: QuestArcCopy
   }
 > = {
   en: {
@@ -1164,6 +1269,84 @@ export const phaseCopy: Record<
         chamberPreviewCollectionAddress: "Collection address",
         chamberPreviewCopy: "Copy",
         chamberPreviewTokenId: "Token ID",
+      },
+    },
+    curator: {
+      sectionTitle: "Exhibitions",
+      statementLabel: "Curatorial statement",
+      coverLabel: "Cover work",
+      titleFallback: "On {theme}",
+      statementFallback: "Works gathered around {theme}, drawn from {count} worlds and hung so that no two neighbours share a world.",
+      wallTextFallback: "{world} — {excerpt}",
+      statusDraft: "Draft",
+      statusPublished: "On view",
+      statusRotated: "Past exhibition",
+      imageUnavailable: "Image unavailable",
+      notifyPublished: "Your artifact #{token} was hung in the exhibition \"{title}\"",
+      notifyLabel: "Exhibitions",
+      errors: {
+        disabled: "Exhibitions are not enabled.",
+        notFound: "Exhibition not found.",
+        insufficientCandidates: "Not enough eligible works to hang a show on this theme.",
+        versionConflict: "This exhibition changed since you loaded it. Reload and try again.",
+        unauthorized: "Curator access required.",
+      },
+    },
+    pricing: {
+      suggestionTitle: "Suggested price",
+      bandLabel: "Typical range {low}–{high} PHASELQ",
+      netProceeds: "After a {bps_pct}% creator royalty you receive {net} PHASELQ",
+      levels: { token: "this artifact's own sales", collection: "this collection's sales", global: "sales across all collections" },
+      rationaleFallback: "Based on {count} recent sales of {scope}, weighted towards the most recent; the weighted median is {median} PHASELQ.",
+      washNote: "{count} sales were excluded as suspected wash trades.",
+      selfSalesNote: "{count} of your own sales were excluded so they cannot move your suggestion.",
+      insufficient: "Not enough recent sales to suggest a price yet.",
+      priceWarningHigh: "This is well above recent sales (typical high {high} PHASELQ).",
+      priceWarningLow: "This is well below recent sales (typical low {low} PHASELQ).",
+      useSuggestion: "Use suggested price",
+    },
+    moderationQueue: {
+      heldNotice: "This post is held while a moderator reviews it.",
+      underReview: "Under review",
+      appealCta: "Appeal this decision",
+      appealSubmitted: "Appeal received. A moderator will review it.",
+      appealResolvedUpheld: "Your appeal was reviewed and the decision stands.",
+      appealResolvedRestored: "Your appeal was accepted and the post is visible again.",
+      queueTitle: "Review queue",
+      slaBreached: "Overdue",
+      decisions: { auto_allow: "Allowed", human_review: "Needs review", auto_hold: "Held" },
+      holdReason: "[ HELD FOR REVIEW ]",
+      notifyHeld: "One of your posts is held for moderator review. You can appeal from the post.",
+      notifyLabel: "Moderation review",
+      appealPlaceholder: "Tell the moderator why this post should be visible",
+      appealFailed: "The appeal could not be sent. Try again.",
+    },
+    questArcs: {
+      sectionTitle: "Your arc",
+      titleFallback: "Your next chapter",
+      stepStates: { locked: "Locked", open: "In progress", done: "Ready to claim", claiming: "Confirming…", claimed: "Claimed" },
+      claim: "Claim step reward",
+      expired: "This arc expired.",
+      superseded: "This arc was replaced by a newer one.",
+      notifyGenerated: "A new quest arc is ready: \"{title}\"",
+      notifyCompleted: "You completed the arc \"{title}\"",
+      notifyLabel: "Quest arcs",
+      stepFallback: {
+        create_collection: "Forge a collection of your own.",
+        mint_nft: "Mint your first artifact.",
+        settle: "Complete a Chamber settlement.",
+        create_world: "Give one of your collections a narrative world.",
+        collection_count: "Mint in {target} different collections.",
+        daily_streak: "Claim your daily reward {target} days in a row.",
+        post_signal: "Post your first signal.",
+      },
+      errors: {
+        disabled: "Quest arcs are not enabled.",
+        alreadyActive: "You already have an active arc.",
+        rateLimited: "You have started too many arcs recently. Try again later.",
+        noEligibleSteps: "You have already done everything an arc could ask of you.",
+        treasuryLow: "Rewards are paused while the treasury refills.",
+        identityBlocked: "This wallet is not eligible for quest arcs.",
       },
     },
   },
@@ -1704,6 +1887,84 @@ export const phaseCopy: Record<
         chamberPreviewTokenId: "ID de token",
       },
     },
+    curator: {
+      sectionTitle: "Exposiciones",
+      statementLabel: "Texto curatorial",
+      coverLabel: "Obra de portada",
+      titleFallback: "Sobre {theme}",
+      statementFallback: "Obras reunidas en torno a {theme}, tomadas de {count} mundos y colgadas de modo que dos vecinas nunca compartan mundo.",
+      wallTextFallback: "{world} — {excerpt}",
+      statusDraft: "Borrador",
+      statusPublished: "En exhibición",
+      statusRotated: "Exposición pasada",
+      imageUnavailable: "Imagen no disponible",
+      notifyPublished: "Tu artefacto #{token} fue colgado en la exposición \"{title}\"",
+      notifyLabel: "Exposiciones",
+      errors: {
+        disabled: "Las exposiciones no están habilitadas.",
+        notFound: "Exposición no encontrada.",
+        insufficientCandidates: "No hay suficientes obras elegibles para colgar una muestra sobre este tema.",
+        versionConflict: "Esta exposición cambió desde que la cargaste. Recargá e intentá de nuevo.",
+        unauthorized: "Se requiere acceso de curador.",
+      },
+    },
+    pricing: {
+      suggestionTitle: "Precio sugerido",
+      bandLabel: "Rango típico {low}–{high} PHASELQ",
+      netProceeds: "Tras una regalía del {bps_pct}% para el creador recibís {net} PHASELQ",
+      levels: { token: "las ventas de este artefacto", collection: "las ventas de esta colección", global: "las ventas de todas las colecciones" },
+      rationaleFallback: "Basado en {count} ventas recientes de {scope}, con más peso a las más recientes; la mediana ponderada es {median} PHASELQ.",
+      washNote: "Se excluyeron {count} ventas por sospecha de wash trading.",
+      selfSalesNote: "Se excluyeron {count} ventas tuyas para que no muevan tu sugerencia.",
+      insufficient: "Todavía no hay suficientes ventas recientes para sugerir un precio.",
+      priceWarningHigh: "Está muy por encima de las ventas recientes (máximo típico {high} PHASELQ).",
+      priceWarningLow: "Está muy por debajo de las ventas recientes (mínimo típico {low} PHASELQ).",
+      useSuggestion: "Usar precio sugerido",
+    },
+    moderationQueue: {
+      heldNotice: "Esta publicación está retenida mientras un moderador la revisa.",
+      underReview: "En revisión",
+      appealCta: "Apelar esta decisión",
+      appealSubmitted: "Apelación recibida. Un moderador la revisará.",
+      appealResolvedUpheld: "Tu apelación fue revisada y la decisión se mantiene.",
+      appealResolvedRestored: "Tu apelación fue aceptada y la publicación vuelve a estar visible.",
+      queueTitle: "Cola de revisión",
+      slaBreached: "Vencido",
+      decisions: { auto_allow: "Permitido", human_review: "Requiere revisión", auto_hold: "Retenido" },
+      holdReason: "[ RETENIDO PARA REVISIÓN ]",
+      notifyHeld: "Una de tus publicaciones está retenida para revisión. Podés apelar desde la publicación.",
+      notifyLabel: "Revisión de moderación",
+      appealPlaceholder: "Contale al moderador por qué esta publicación debería estar visible",
+      appealFailed: "No se pudo enviar la apelación. Intentá de nuevo.",
+    },
+    questArcs: {
+      sectionTitle: "Tu arco",
+      titleFallback: "Tu próximo capítulo",
+      stepStates: { locked: "Bloqueado", open: "En curso", done: "Listo para reclamar", claiming: "Confirmando…", claimed: "Reclamado" },
+      claim: "Reclamar recompensa del paso",
+      expired: "Este arco expiró.",
+      superseded: "Este arco fue reemplazado por uno más nuevo.",
+      notifyGenerated: "Hay un nuevo arco de misiones listo: \"{title}\"",
+      notifyCompleted: "Completaste el arco \"{title}\"",
+      notifyLabel: "Arcos de misiones",
+      stepFallback: {
+        create_collection: "Forjá una colección propia.",
+        mint_nft: "Minteá tu primer artefacto.",
+        settle: "Completá un settlement en la Cámara.",
+        create_world: "Dale un mundo narrativo a una de tus colecciones.",
+        collection_count: "Minteá en {target} colecciones distintas.",
+        daily_streak: "Reclamá tu recompensa diaria {target} días seguidos.",
+        post_signal: "Publicá tu primera señal.",
+      },
+      errors: {
+        disabled: "Los arcos de misiones no están habilitados.",
+        alreadyActive: "Ya tenés un arco activo.",
+        rateLimited: "Iniciaste demasiados arcos recientemente. Intentá más tarde.",
+        noEligibleSteps: "Ya hiciste todo lo que un arco podría pedirte.",
+        treasuryLow: "Las recompensas están en pausa mientras se repone la tesorería.",
+        identityBlocked: "Esta wallet no es elegible para arcos de misiones.",
+      },
+    },
   },
 }
 
@@ -1719,4 +1980,11 @@ export function pickCopy(lang: unknown) {
       ? (lang as AppLang)
       : "en"
   return phaseCopy[safeLang]
+}
+
+/** Fill `{name}` placeholders in a copy template; unknown placeholders are left as-is. */
+export function fillCopy(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{([a-z_]+)\}/gi, (match, key: string) =>
+    Object.prototype.hasOwnProperty.call(vars, key) ? String(vars[key]) : match,
+  )
 }

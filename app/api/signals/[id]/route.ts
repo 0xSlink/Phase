@@ -9,12 +9,31 @@ import {
   VersionConflictError,
   editSignal,
   SignalEditError,
+  withModerationView,
 } from "@/lib/signal-store"
 import { createNotification } from "@/lib/notification-store"
 import { checkAndUnlock } from "@/lib/achievement-store"
 import { createApiRequestContext } from "@/lib/api-observability"
 import { recordSignalCrdtCommit } from "@/lib/signal-version-metrics"
 import { isSignalCrdtEnabled, readSignalLoreDraft } from "@/lib/signal-crdt-store"
+import { isModerationTriageEnabled, screenInBackground } from "@/lib/moderation-triage"
+
+/**
+ * phase-146: every committed revision is screened, including a promoted CRDT
+ * draft. Drafts themselves are scratch state that never reaches a listing, so
+ * the screen sits here at the commit, not in the merge path.
+ */
+function screenRevision(signal: { id: string; author_wallet: string; title: string; body: string; nft_image?: string }) {
+  if (!isModerationTriageEnabled()) return
+  screenInBackground({
+    targetKind: "signal",
+    targetId: signal.id,
+    authorWallet: signal.author_wallet,
+    title: signal.title,
+    body: signal.body,
+    hasMedia: Boolean(signal.nft_image),
+  })
+}
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -34,7 +53,7 @@ export async function GET(
   }
   const replies = await getReplies(id)
   return api.json(
-    { signal, replies },
+    { signal: withModerationView(signal), replies },
     { status: 200, event: "signals.get.ok", headers: { ETag: signalETag(signal.version) } },
   )
 }
@@ -266,6 +285,7 @@ export async function PATCH(
       },
       ifMatch.version,
     )
+    screenRevision(signal)
     return api.json(
       { signal, version },
       {
@@ -352,6 +372,7 @@ export async function PUT(
       { title: body.title, body: body.body },
       ifMatch.version,
     )
+    screenRevision(signal)
     if (fromDraft) recordSignalCrdtCommit("committed")
     return api.json(
       {

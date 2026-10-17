@@ -274,6 +274,9 @@ function ensureListingColumns(conn: DatabaseSync): void {
 const OFFER_COLUMNS: Array<{ name: string; ddl: string }> = [
   { name: "wash_flagged", ddl: "wash_flagged INTEGER NOT NULL DEFAULT 0" },
   { name: "wash_reason", ddl: "wash_reason TEXT" },
+  // phase-143: when the seller accepted/rejected. Comps decay from the sale,
+  // not from when the bid was first placed (up to 48h earlier).
+  { name: "decided_at", ddl: "decided_at INTEGER" },
 ];
 
 function ensureOfferColumns(conn: DatabaseSync): void {

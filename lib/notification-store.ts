@@ -21,6 +21,12 @@ export type NotificationType =
   | "content_takedown"
   | "royalty_payout"
   | "signal_reaction"
+  // phase-142/146/147
+  | "exhibition_published"
+  | "moderation_hold"
+  | "moderation_appeal_resolved"
+  | "quest_arc_generated"
+  | "quest_arc_completed"
 
 export type Notification = {
   id: string

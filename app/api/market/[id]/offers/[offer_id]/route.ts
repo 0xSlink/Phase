@@ -13,6 +13,7 @@ import {
   recordCollabSplits,
 } from "@/lib/market-store"
 import { createNotification } from "@/lib/notification-store"
+import { isPricingOracleEnabled, markSuggestionSold } from "@/lib/pricing-oracle"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -55,11 +56,13 @@ export async function POST(
   if (action === "accept") {
     await soldListing(id)
 
-    // Spike 674 (flag-gated): N-way fan-out at accept (dust → first payee, idempotent per offer).
-    let splits: Awaited<ReturnType<typeof recordCollabSplits>> | null = null
-    if (isPhaseCollabSplitsEnabled() && listing.split_payees && listing.split_payees.length > 0) {
-      const computed = computeCollabSplits(offer.amount_phaselq, listing.split_payees)
-      splits = await recordCollabSplits(id, offer.id, computed)
+    // phase-143: time-to-sale for the suggestion this listing was priced from.
+    if (isPricingOracleEnabled()) {
+      try {
+        markSuggestionSold(id)
+      } catch (error) {
+        console.warn("[phase-143] time-to-sale not stamped:", error)
+      }
     }
 
     // phase-140: split proceeds with the original creator on a secondary sale.

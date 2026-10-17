@@ -630,8 +630,8 @@ export async function updateOfferStatus(
 ): Promise<Offer | null> {
   const db = getDb();
   const result = db
-    .prepare("UPDATE offers SET status = ? WHERE id = ?")
-    .run(status, offer_id);
+    .prepare("UPDATE offers SET status = ?, decided_at = ? WHERE id = ?")
+    .run(status, status === "accepted" || status === "rejected" ? Date.now() : null, offer_id);
   if (result.changes === 0) return null;
   const row = db
     .prepare("SELECT * FROM offers WHERE id = ?")
@@ -1070,3 +1070,113 @@ export async function filterBlockedOffers(
   return offers.filter((o) => !blocked.has(o.buyer_wallet));
 }
 
+
+// ── phase-142 / phase-143: sale comps ─────────────────────────────────────────
+//
+// A "sale" in this market is an accepted offer: that is the only row recording
+// a price two parties agreed on. royalty_payouts is keyed by offer_id and holds
+// the same sale again (split into creator/seller parts), so comps are read from
+// offers only and joined to royalty_payouts by offer_id where the split matters
+// — summing both tables would count every secondary sale twice.
+//
+// Pending offers are bids, not sales. Expiry is lazy (rowToOffer reports a
+// stale pending row as expired without writing it), so every bid query filters
+// `expires_at > now` itself rather than trusting `status = 'pending'`.
+
+export type SaleComp = {
+  offer_id: string;
+  listing_id: string;
+  token_id: number;
+  collection_id: number;
+  seller_wallet: string;
+  buyer_wallet: string;
+  amount_phaselq: number;
+  sold_at: number;
+  wash_flagged: boolean;
+  wash_reason: string | null;
+};
+
+type SaleCompRow = Omit<SaleComp, "wash_flagged"> & { wash_flagged: number };
+
+const SALE_COMP_LIMIT = 500;
+
+export function getSaleComps(
+  scope: { collection_id?: number; token_id?: number },
+  opts: { since?: number; limit?: number } = {},
+): SaleComp[] {
+  const conditions = ["o.status = 'accepted'", "COALESCE(o.decided_at, o.created_at) >= ?"];
+  const params: unknown[] = [opts.since ?? 0];
+  if (scope.collection_id !== undefined) {
+    conditions.push("l.collection_id = ?");
+    params.push(scope.collection_id);
+  }
+  if (scope.token_id !== undefined) {
+    conditions.push("l.token_id = ?");
+    params.push(scope.token_id);
+  }
+  const limit = Math.min(SALE_COMP_LIMIT, Math.max(1, Math.floor(opts.limit ?? SALE_COMP_LIMIT)));
+  const rows = getDb()
+    .prepare(
+      `SELECT o.id AS offer_id, o.listing_id, l.token_id, l.collection_id, l.seller_wallet,
+              o.buyer_wallet, o.amount_phaselq,
+              COALESCE(o.decided_at, o.created_at) AS sold_at,
+              o.wash_flagged, o.wash_reason
+         FROM offers o
+         JOIN listings l ON l.id = o.listing_id
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY sold_at DESC
+        LIMIT ?`,
+    )
+    .all(...params, limit) as SaleCompRow[];
+  return rows.map((row) => ({ ...row, wash_flagged: row.wash_flagged === 1 }));
+}
+
+/** Active asks in a collection, cheapest first. */
+export function getActiveAsks(
+  collection_id: number,
+  limit = 200,
+): Array<{ listing_id: string; token_id: number; seller_wallet: string; price_phaselq: number }> {
+  return getDb()
+    .prepare(
+      `SELECT id AS listing_id, token_id, seller_wallet, price_phaselq
+         FROM listings WHERE status = 'active' AND collection_id = ?
+        ORDER BY price_phaselq ASC LIMIT ?`,
+    )
+    .all(collection_id, Math.min(500, Math.max(1, limit))) as Array<{
+    listing_id: string;
+    token_id: number;
+    seller_wallet: string;
+    price_phaselq: number;
+  }>;
+}
+
+/** Live (not lazily-expired), non-wash bids on a collection's active listings. */
+export function getLiveBids(
+  collection_id: number,
+  now: number = Date.now(),
+): Array<{ offer_id: string; amount_phaselq: number }> {
+  return getDb()
+    .prepare(
+      `SELECT o.id AS offer_id, o.amount_phaselq
+         FROM offers o JOIN listings l ON l.id = o.listing_id
+        WHERE l.collection_id = ? AND l.status = 'active'
+          AND o.status = 'pending' AND o.expires_at > ? AND o.wash_flagged = 0
+        ORDER BY o.amount_phaselq DESC LIMIT 200`,
+    )
+    .all(collection_id, now) as Array<{ offer_id: string; amount_phaselq: number }>;
+}
+
+/** Tokens with a wash-flagged accepted sale since `since` — kept off curated walls. */
+export function getWashFlaggedTokenIds(tokenIds: readonly number[], since: number): Set<number> {
+  if (tokenIds.length === 0) return new Set();
+  const placeholders = tokenIds.map(() => "?").join(",");
+  const rows = getDb()
+    .prepare(
+      `SELECT DISTINCT l.token_id FROM offers o JOIN listings l ON l.id = o.listing_id
+        WHERE o.status = 'accepted' AND o.wash_flagged = 1
+          AND COALESCE(o.decided_at, o.created_at) >= ?
+          AND l.token_id IN (${placeholders})`,
+    )
+    .all(since, ...tokenIds) as Array<{ token_id: number }>;
+  return new Set(rows.map((r) => r.token_id));
+}
