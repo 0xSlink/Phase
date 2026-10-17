@@ -60,6 +60,24 @@ export async function GET(
       )
     }
 
+    const { isFeatureEnabled } = await import("@/lib/feature-flags")
+    let variantHeaders: Record<string, string> = {}
+
+    if (isFeatureEnabled("phase-142")) {
+      const { parseTransformParams, calculateFocalCrop, STANDARD_IMAGE_VARIANTS } = await import("@/lib/focal-crop")
+      const transform = parseTransformParams(request.nextUrl.searchParams)
+      if (transform.variant || (transform.width && transform.height)) {
+        const aspect = (transform.width && transform.height)
+          ? transform.width / transform.height
+          : (transform.variant ? STANDARD_IMAGE_VARIANTS[transform.variant].aspect : 1.0)
+        const crop = calculateFocalCrop({ width: 2048, height: 2048 }, aspect, transform.focal)
+        variantHeaders = {
+          "X-Phase-Image-Variant": transform.variant ?? "custom",
+          "X-Phase-Focal-Crop": `${crop.x},${crop.y},${crop.width},${crop.height}`,
+        }
+      }
+    }
+
     return new NextResponse(result.bytes, {
       status: 200,
       headers: {
@@ -69,6 +87,7 @@ export async function GET(
         Vary: "Authorization",
         "X-Phase-Cid-Verified": verification.ok ? "1" : "0",
         ...(isPhase123Enabled() ? { "X-Phase-Gateway": result.gateway, "X-Phase-Latency-Ms": String(result.latencyMs) } : {}),
+        ...variantHeaders,
       },
     })
   }

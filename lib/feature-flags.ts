@@ -37,10 +37,10 @@
  * - phase-140: royalty enforcement on secondary sales via a creator/seller split
  * - phase-141: CRDT-collaborative lore drafting (Yjs) for signals, with an
  *   audited compare-and-swap commit path (`PUT /api/signals/[id]`)
- * - phase-146: buyback-and-burn mechanism funded from protocol treasury fees
- * - phase-147: staked forge-fee discounts with tiered PHASELQ lock and fee tiers
- * - phase-148: continuous bonding curves for open editions with supply-priced minting
- * - phase-149: prediction markets on drop outcomes with play-money stakes and oracle settlement
+ * - phase-142: AI thumbnail and crop generation with focal-point-aware variants
+ * - phase-143: AI-driven churn and winback with dormant detection plus experiments
+ * - phase-144: ve-PHASELQ locking with time-locked weight plus fee share
+ * - phase-145: gauge voting for emissions with ve-weight directing quest budgets
  */
 
 export type PhaseFeatureFlag =
@@ -99,10 +99,10 @@ export type PhaseFeatureFlag =
   | "phase-139"
   | "phase-140"
   | "phase-141"
-  | "phase-146"
-  | "phase-147"
-  | "phase-148"
-  | "phase-149";
+  | "phase-142"
+  | "phase-143"
+  | "phase-144"
+  | "phase-145";
 
 const FLAG_ENV_MAP: Record<PhaseFeatureFlag, string[]> = {
   "phase-66": ["NEXT_PUBLIC_FEATURE_PHASE_66", "FEATURE_PHASE_66"],
@@ -159,10 +159,10 @@ const FLAG_ENV_MAP: Record<PhaseFeatureFlag, string[]> = {
   "phase-139": ["NEXT_PUBLIC_FEATURE_PHASE_139", "FEATURE_PHASE_139"],
   "phase-140": ["NEXT_PUBLIC_FEATURE_PHASE_140", "FEATURE_PHASE_140"],
   "phase-141": ["NEXT_PUBLIC_FEATURE_PHASE_141", "FEATURE_PHASE_141"],
-  "phase-146": ["NEXT_PUBLIC_FEATURE_PHASE_146", "FEATURE_PHASE_146"],
-  "phase-147": ["NEXT_PUBLIC_FEATURE_PHASE_147", "FEATURE_PHASE_147"],
-  "phase-148": ["NEXT_PUBLIC_FEATURE_PHASE_148", "FEATURE_PHASE_148"],
-  "phase-149": ["NEXT_PUBLIC_FEATURE_PHASE_149", "FEATURE_PHASE_149"],
+  "phase-142": ["NEXT_PUBLIC_FEATURE_PHASE_142", "FEATURE_PHASE_142"],
+  "phase-143": ["NEXT_PUBLIC_FEATURE_PHASE_143", "FEATURE_PHASE_143"],
+  "phase-144": ["NEXT_PUBLIC_FEATURE_PHASE_144", "FEATURE_PHASE_144"],
+  "phase-145": ["NEXT_PUBLIC_FEATURE_PHASE_145", "FEATURE_PHASE_145"],
 };
 
 function isTruthy(v: string | undefined): boolean {
@@ -252,10 +252,10 @@ export function getEnabledFeatureFlags(): PhaseFeatureFlag[] {
     "phase-139",
     "phase-140",
     "phase-141",
-    "phase-146",
-    "phase-147",
-    "phase-148",
-    "phase-149",
+    "phase-142",
+    "phase-143",
+    "phase-144",
+    "phase-145",
   ];
   // Filtering is evaluated at call time, allowing runtime test overrides.
   return all.filter(isFeatureEnabled)
