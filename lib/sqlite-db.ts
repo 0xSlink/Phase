@@ -188,47 +188,59 @@ CREATE INDEX IF NOT EXISTS idx_royalty_payouts_creator
 CREATE INDEX IF NOT EXISTS idx_royalty_payouts_listing
   ON royalty_payouts (listing_id);
 
-CREATE TABLE IF NOT EXISTS agent_market_maker_quotes (
-  id                    TEXT PRIMARY KEY,
-  agent_wallet          TEXT NOT NULL,
-  collection_id         INTEGER NOT NULL,
-  bid_price_stroops     TEXT NOT NULL,
-  ask_price_stroops     TEXT NOT NULL,
-  bid_size              INTEGER NOT NULL,
-  ask_size              INTEGER NOT NULL,
-  inventory_units       INTEGER NOT NULL DEFAULT 0,
-  max_inventory_units   INTEGER NOT NULL DEFAULT 10,
-  status                TEXT NOT NULL DEFAULT 'ACTIVE',
-  updated_at            INTEGER NOT NULL
+CREATE TABLE IF NOT EXISTS buyback_burn_events (
+  id                      TEXT PRIMARY KEY,
+  epoch                   INTEGER NOT NULL,
+  amount_spent_stroops    TEXT NOT NULL,
+  phaselq_burned_stroops  TEXT NOT NULL,
+  source                  TEXT NOT NULL,
+  tx_hash                 TEXT,
+  created_at              INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_agent_mm_quotes_agent
-  ON agent_market_maker_quotes (agent_wallet, collection_id);
+CREATE INDEX IF NOT EXISTS idx_buyback_burn_epoch
+  ON buyback_burn_events (epoch, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS lore_audit_reports (
-  id                    TEXT PRIMARY KEY,
-  collection_id         INTEGER,
-  total_narratives_scanned INTEGER NOT NULL,
-  contradictions_found  INTEGER NOT NULL,
-  status                TEXT NOT NULL DEFAULT 'COMPLETED',
-  created_at            INTEGER NOT NULL
+CREATE TABLE IF NOT EXISTS bonding_curve_editions (
+  collection_id           INTEGER PRIMARY KEY,
+  base_price_stroops      TEXT NOT NULL,
+  slope_stroops           TEXT NOT NULL,
+  current_supply          INTEGER NOT NULL DEFAULT 0,
+  max_supply              INTEGER NOT NULL DEFAULT 1000,
+  reserve_stroops         TEXT NOT NULL DEFAULT '0',
+  updated_at              INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_lore_audit_reports_col
-  ON lore_audit_reports (collection_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS lore_contradiction_items (
-  id                    TEXT PRIMARY KEY,
-  report_id             TEXT NOT NULL REFERENCES lore_audit_reports(id) ON DELETE CASCADE,
-  entity_name           TEXT NOT NULL,
-  severity              TEXT NOT NULL,
-  passage_a             TEXT NOT NULL,
-  token_id_a            INTEGER,
-  passage_b             TEXT NOT NULL,
-  token_id_b            INTEGER,
-  explanation           TEXT NOT NULL,
-  confidence            REAL NOT NULL
+CREATE TABLE IF NOT EXISTS prediction_markets (
+  id                      TEXT PRIMARY KEY,
+  question                TEXT NOT NULL,
+  category                TEXT NOT NULL,
+  collection_id           INTEGER,
+  outcome_yes_pool        TEXT NOT NULL DEFAULT '0',
+  outcome_no_pool         TEXT NOT NULL DEFAULT '0',
+  status                  TEXT NOT NULL DEFAULT 'active',
+  resolved_outcome        TEXT,
+  closes_at               INTEGER NOT NULL,
+  created_at              INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_lore_contradictions_rep
-  ON lore_contradiction_items (report_id);
+CREATE INDEX IF NOT EXISTS idx_prediction_markets_status
+  ON prediction_markets (status, closes_at);
+CREATE INDEX IF NOT EXISTS idx_prediction_markets_col
+  ON prediction_markets (collection_id);
+
+CREATE TABLE IF NOT EXISTS prediction_positions (
+  id                      TEXT PRIMARY KEY,
+  market_id               TEXT NOT NULL REFERENCES prediction_markets(id) ON DELETE CASCADE,
+  wallet                  TEXT NOT NULL,
+  outcome                 TEXT NOT NULL,
+  amount_stroops          TEXT NOT NULL,
+  shares                  REAL NOT NULL,
+  claimed                 INTEGER NOT NULL DEFAULT 0,
+  created_at              INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_prediction_positions_market
+  ON prediction_positions (market_id);
+CREATE INDEX IF NOT EXISTS idx_prediction_positions_wallet
+  ON prediction_positions (wallet, market_id);
 `;
 
 // Issue #89 (phase-140): `listings` predates the creator/royalty concept, so
