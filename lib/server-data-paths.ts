@@ -39,6 +39,7 @@ const FILES = {
   generationJobs: "generation-jobs.json",
   generationDlq: "generation-dlq.json",
   winbackExperiments: "winback-experiments.json",
+  webhookSubscriptions: "webhook-subscriptions.json",
 } as const
 
 export type ServerDataFile = keyof typeof FILES
