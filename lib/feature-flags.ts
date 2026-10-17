@@ -41,6 +41,8 @@
  * - phase-143: AI-driven churn and winback with dormant detection plus experiments
  * - phase-144: ve-PHASELQ locking with time-locked weight plus fee share
  * - phase-145: gauge voting for emissions with ve-weight directing quest budgets
+ * - phase-154: outbound webhook subscriptions — signed event delivery to
+ *   third-party endpoints (partial slice of spike 664 / issue #527)
  */
 
 export type PhaseFeatureFlag =
@@ -102,7 +104,8 @@ export type PhaseFeatureFlag =
   | "phase-142"
   | "phase-143"
   | "phase-144"
-  | "phase-145";
+  | "phase-145"
+  | "phase-154";
 
 const FLAG_ENV_MAP: Record<PhaseFeatureFlag, string[]> = {
   "phase-66": ["NEXT_PUBLIC_FEATURE_PHASE_66", "FEATURE_PHASE_66"],
@@ -163,6 +166,7 @@ const FLAG_ENV_MAP: Record<PhaseFeatureFlag, string[]> = {
   "phase-143": ["NEXT_PUBLIC_FEATURE_PHASE_143", "FEATURE_PHASE_143"],
   "phase-144": ["NEXT_PUBLIC_FEATURE_PHASE_144", "FEATURE_PHASE_144"],
   "phase-145": ["NEXT_PUBLIC_FEATURE_PHASE_145", "FEATURE_PHASE_145"],
+  "phase-154": ["NEXT_PUBLIC_FEATURE_PHASE_154", "FEATURE_PHASE_154"],
 };
 
 function isTruthy(v: string | undefined): boolean {
@@ -256,6 +260,7 @@ export function getEnabledFeatureFlags(): PhaseFeatureFlag[] {
     "phase-143",
     "phase-144",
     "phase-145",
+    "phase-154",
   ];
   // Filtering is evaluated at call time, allowing runtime test overrides.
   return all.filter(isFeatureEnabled)
