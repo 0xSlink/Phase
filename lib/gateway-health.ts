@@ -182,3 +182,9 @@ export const GatewayHealthQuerySchema = z.object({
 })
 
 export type GatewayHealthQuery = z.infer<typeof GatewayHealthQuerySchema>
+
+// ── Spikes 672-675: no logic change — drops/dutch reuse prioritizeGatewaysByHealth and
+// stale-on-error fallbacks; new flows must not add per-wallet labels here.
+export function spikeGatewayFenceNote(): string {
+  return "gateways fenced by prioritizeGatewaysByHealth; contract drift fenced by get_config; issuer fenced by resolvePhaserLiqClassicAsset";
+}
