@@ -588,6 +588,8 @@ export async function takedownSignal(
 ): Promise<Signal> {
   const row = getSignalRow(id);
   if (!row) throw new Error("Signal not found");
+  const { assertNoLegalHold } = await import("@/lib/legal-hold");
+  await assertNoLegalHold("signal", id, "takedown", row.author_wallet);
   const taken_down_at = Date.now();
   getDb()
     .prepare(
@@ -606,6 +608,8 @@ export async function takedownSignal(
 export async function restoreSignal(id: string): Promise<Signal> {
   const row = getSignalRow(id);
   if (!row) throw new Error("Signal not found");
+  const { assertNoLegalHold } = await import("@/lib/legal-hold");
+  await assertNoLegalHold("signal", id, "restore", row.author_wallet);
   getDb()
     .prepare(
       "UPDATE signals SET taken_down = 0, takedown_reason = NULL, taken_down_at = NULL WHERE id = ?",

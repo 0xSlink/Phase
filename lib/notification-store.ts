@@ -280,6 +280,8 @@ export async function getNotifications(wallet: string, limit = 30): Promise<Noti
 }
 
 export async function markRead(wallet: string, notificationId: string): Promise<void> {
+  const { assertNoLegalHold } = await import("@/lib/legal-hold");
+  await assertNoLegalHold("wallet", wallet, "mark_read");
   await updateStore<NotificationStore>("notifications", (store) => {
     const list = store[wallet]
     if (!list) return
@@ -288,6 +290,8 @@ export async function markRead(wallet: string, notificationId: string): Promise<
 }
 
 export async function markAllRead(wallet: string): Promise<void> {
+  const { assertNoLegalHold } = await import("@/lib/legal-hold");
+  await assertNoLegalHold("wallet", wallet, "mark_all_read");
   await updateStore<NotificationStore>("notifications", (store) => {
     const list = store[wallet]
     if (!list) return

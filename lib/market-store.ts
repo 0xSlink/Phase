@@ -513,6 +513,11 @@ async function setListingStatus(
 }
 
 export async function cancelListing(id: string): Promise<Listing | null> {
+  const listing = await getListing(id);
+  if (listing) {
+    const { assertNoLegalHold } = await import("@/lib/legal-hold");
+    await assertNoLegalHold("listing", id, "cancel_listing", listing.seller_wallet);
+  }
   return setListingStatus(id, "cancelled");
 }
 

@@ -32,6 +32,11 @@ export async function saveProfile(
   wallet: string,
   data: Omit<ProfileData, "updated_at">,
 ): Promise<ProfileData> {
+  const existing = await getProfile(wallet);
+  if (existing) {
+    const { assertNoLegalHold } = await import("@/lib/legal-hold");
+    await assertNoLegalHold("wallet", wallet, "save_profile");
+  }
   const entry: ProfileData = {
     ...data,
     updated_at: Date.now(),

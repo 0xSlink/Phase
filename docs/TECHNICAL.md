@@ -689,5 +689,25 @@ Flag: `phase-168` (`NEXT_PUBLIC_FEATURE_PHASE_168` / `FEATURE_PHASE_168`), defau
 
 Role credentials: `PHASE_ADMIN_KEY`, `PHASE_MODERATOR_KEY`, and `PHASE_REGULATOR_TOKEN`.
 
+## 19. Legal-Hold Preservation with Deny-Delete (Spike 636 / Issue #498)
+
+Flag: `phase-169` (`NEXT_PUBLIC_FEATURE_PHASE_169` / `FEATURE_PHASE_169`), default off. Rollback: unset var, restart.
+
+| Endpoint | Method | Scope | Contract |
+|---|---|---|---|
+| `/api/legal-hold` | GET | admin query | Queries active legal holds matching `target_type` (`wallet`, `signal`, `collection`, `listing`, `profile`) and `target_id`. |
+| `/api/legal-hold` | POST | admin key | Creates and places a legal hold with custodian credentials, matter identifier, reason, optional retention clock (`retention_days`), and optional `immutable_worm` flag. Returns `201 Created`. |
+| `/api/legal-hold/[id]/release` | POST | admin key | Releases an active legal hold. If `immutable_worm` is enabled, releases prior to retention clock expiration return `423 Locked`. |
+
+Enforcement surfaces:
+- `takedownSignal` & `restoreSignal` (`lib/signal-store.ts`)
+- `POST /api/signals/[id]/moderate`
+- `saveProfile` (`lib/profile-store.ts`)
+- `cancelListing` (`lib/market-store.ts`)
+- `markRead` & `markAllRead` (`lib/notification-store.ts`)
+
+Sidecar: `legal-holds.json` in `.data/` or `PHASE_SERVER_DATA_DIR`.
+
+
 
 
