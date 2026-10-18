@@ -636,3 +636,20 @@ rather than widened.
 Per-file rulings for each issue's affected-file list are in
 `docs/spikes/142-curator-exhibitions.md`, `143-pricing-oracle.md`,
 `146-moderation-triage.md` and `147-quest-arcs.md`.
+
+## 15. Auth, network, age gating and licensing (spikes 637, 639, 640, 641)
+
+Flags: `phase-162` (SEP-10), `phase-163` (network), `phase-164` (age gate), `phase-165` (license attestation). All default off. See `PROJECT_ARCHITECTURE.md` §10.
+
+| Env | Scope | Purpose |
+|-----|-------|---------|
+| `SEP10_SERVER_SECRET` | server only | Signs SEP-10 challenge transactions. Never expose with `NEXT_PUBLIC_*`. |
+| `SEP10_HOME_DOMAIN` | server | Home domain bound into challenges (default `phase.app`). |
+| `SEP10_WEB_AUTH_DOMAIN` | server | Web auth domain (defaults to home domain). |
+| `STELLAR_NETWORK` | server + client | `testnet` (default) or `mainnet`. Selects the canonical passphrase. |
+| `STELLAR_NETWORK_PASSPHRASE` | server | Optional; must match `STELLAR_NETWORK` or startup resolution throws. |
+| `PHASE_MAINNET_CUTOVER_ACK` | server | Must be `1` to resolve `mainnet` (cutover ceremony acknowledgement). |
+
+Sidecars (`.data/`, or `PHASE_SERVER_DATA_DIR`): `auth-sessions.json` (SHA-256 of session tokens and consumed challenge hashes only), `age-declarations.json` (bands only, no birth years), `license-attestations.json` (one per collection, nonce-unique).
+
+Known gaps: header-based routes (`acting_wallet`, `X-Wallet-Address`) are not yet migrated to sessions; sidecar writes are unlocked (single-instance only, same as other sidecars); viewer/claim-side age gating and mainnet seeding are not implemented.

@@ -40,6 +40,9 @@ const FILES = {
   generationDlq: "generation-dlq.json",
   winbackExperiments: "winback-experiments.json",
   webhookSubscriptions: "webhook-subscriptions.json",
+  authSessions: "auth-sessions.json",
+  ageDeclarations: "age-declarations.json",
+  licenseAttestations: "license-attestations.json",
 } as const
 
 export type ServerDataFile = keyof typeof FILES
