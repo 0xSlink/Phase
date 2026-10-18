@@ -52,6 +52,12 @@
  * - phase-161: typed contract-error taxonomy — code-stable PhaseError
  *   descriptors with retryable hints and message keys (partial slice of spike
  *   660 / issue #523)
+ * - phase-162: SEP-10 web authentication challenges and sessions replacing
+ *   loose wallet headers (spike 641 / issue #503)
+ * - phase-163: Stellar network resolution with passphrase validation and a
+ *   mainnet cutover acknowledgement (spike 640 / issue #502)
+ * - phase-164: self-attested age bands with 18+/21+ campaign gating (spike 637 / issue #499)
+ * - phase-165: signed creator licensing attestation on world creation (spike 639 / issue #501)
  */
 
 export type PhaseFeatureFlag =
@@ -118,7 +124,11 @@ export type PhaseFeatureFlag =
   | "phase-158"
   | "phase-159"
   | "phase-160"
-  | "phase-161";
+  | "phase-161"
+  | "phase-162"
+  | "phase-163"
+  | "phase-164"
+  | "phase-165";
 
 const FLAG_ENV_MAP: Record<PhaseFeatureFlag, string[]> = {
   "phase-66": ["NEXT_PUBLIC_FEATURE_PHASE_66", "FEATURE_PHASE_66"],
@@ -184,6 +194,10 @@ const FLAG_ENV_MAP: Record<PhaseFeatureFlag, string[]> = {
   "phase-159": ["NEXT_PUBLIC_FEATURE_PHASE_159", "FEATURE_PHASE_159"],
   "phase-160": ["NEXT_PUBLIC_FEATURE_PHASE_160", "FEATURE_PHASE_160"],
   "phase-161": ["NEXT_PUBLIC_FEATURE_PHASE_161", "FEATURE_PHASE_161"],
+  "phase-162": ["NEXT_PUBLIC_FEATURE_PHASE_162", "FEATURE_PHASE_162"],
+  "phase-163": ["NEXT_PUBLIC_FEATURE_PHASE_163", "FEATURE_PHASE_163"],
+  "phase-164": ["NEXT_PUBLIC_FEATURE_PHASE_164", "FEATURE_PHASE_164"],
+  "phase-165": ["NEXT_PUBLIC_FEATURE_PHASE_165", "FEATURE_PHASE_165"],
 };
 
 function isTruthy(v: string | undefined): boolean {
@@ -282,6 +296,10 @@ export function getEnabledFeatureFlags(): PhaseFeatureFlag[] {
     "phase-159",
     "phase-160",
     "phase-161",
+    "phase-162",
+    "phase-163",
+    "phase-164",
+    "phase-165",
   ];
   // Filtering is evaluated at call time, allowing runtime test overrides.
   return all.filter(isFeatureEnabled)
