@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { createHash, randomUUID } from "node:crypto";
 import { StrKey } from "@stellar/stellar-sdk";
 import { z } from "zod";
@@ -1180,3 +1180,15 @@ export function getWashFlaggedTokenIds(tokenIds: readonly number[], since: numbe
     .all(since, ...tokenIds) as Array<{ token_id: number }>;
   return new Set(rows.map((r) => r.token_id));
 }
+
+/**
+ * phase-167 / Spike 634: Export marketplace listings and offers for GDPR Article 20 data portability.
+ */
+export async function exportMarketForWallet(
+  wallet: string,
+): Promise<{ listings: Listing[]; offers_as_buyer: Offer[] }> {
+  const listings = await getListings({ seller_wallet: wallet });
+  const offers_as_buyer = await getOffersByBuyer(wallet);
+  return { listings, offers_as_buyer };
+}
+

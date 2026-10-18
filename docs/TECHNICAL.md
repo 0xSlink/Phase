@@ -668,3 +668,15 @@ Flag: `phase-166` (`NEXT_PUBLIC_FEATURE_PHASE_166` / `FEATURE_PHASE_166`), defau
 
 Sidecars (`.data/`, or `PHASE_SERVER_DATA_DIR`): `terms-consents.json` (keyed by wallet, stores pinned versions and content digests), `legal-documents.json` (optional overrides).
 
+## 17. GDPR Article 20 Data Portability Export (Spike 634 / Issue #496)
+
+Flag: `phase-167` (`NEXT_PUBLIC_FEATURE_PHASE_167` / `FEATURE_PHASE_167`), default off. Rollback: unset var, restart.
+
+| Endpoint | Method | Scope | Contract |
+|---|---|---|---|
+| `/api/user/export` | GET | wallet query | Generates and downloads a unified GDPR Article 20 data portability bundle containing profile, follows, notifications, market activity, authored signals, badges, and consents. Includes cryptographic manifest with per-domain and aggregate SHA-256 checksums, redacts third-party PII, and sets `Content-Disposition: attachment`. |
+| `/api/profile/export` | GET | wallet query | Alias route forwarding to `/api/user/export`. |
+
+Bundle manifest format: `phase-gdpr-article-20-bundle` with strict schema version `1.0.0`.
+
+

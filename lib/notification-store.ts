@@ -505,3 +505,14 @@ export type SpikeNotificationKind = "drop_started" | "drop_queue_position" | "du
 export function spikeNotificationType(kind: SpikeNotificationKind): string {
   return kind;
 }
+
+/**
+ * phase-167 / Spike 634: Export notifications and preferences for GDPR Article 20 data portability.
+ */
+export async function exportNotificationsForWallet(
+  wallet: string,
+): Promise<{ items: Notification[]; preferences: NotificationPreferences }> {
+  const items = await getNotifications(wallet);
+  const preferences = await getNotificationPreferences(wallet);
+  return { items, preferences };
+}

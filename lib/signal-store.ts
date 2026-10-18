@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { nanoid } from "nanoid";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getDb } from "@/lib/sqlite-db";
@@ -1435,4 +1435,29 @@ export async function toggleSignalReaction(
   const summary = await getSignalReactionSummary(signal_id, wallet);
   return { toggled, summary };
 }
+
+/**
+ * phase-167 / Spike 634: Export authored signals, replies, and reactions for GDPR Article 20 data portability.
+ */
+export async function exportSignalsForWallet(wallet: string): Promise<{
+  signals: Array<Record<string, unknown>>;
+  replies: Array<Record<string, unknown>>;
+  reactions: Array<Record<string, unknown>>;
+}> {
+  const db = getDb();
+  const signals = db
+    .prepare("SELECT id, channel, title, body, status, created_at, updated_at FROM signals WHERE author_wallet = ?")
+    .all(wallet) as Array<Record<string, unknown>>;
+
+  const replies = db
+    .prepare("SELECT id, signal_id, body, created_at FROM signal_replies WHERE author_wallet = ?")
+    .all(wallet) as Array<Record<string, unknown>>;
+
+  const reactions = db
+    .prepare("SELECT signal_id, emoji, created_at FROM signal_reactions WHERE wallet = ?")
+    .all(wallet) as Array<Record<string, unknown>>;
+
+  return { signals, replies, reactions };
+}
+
 
