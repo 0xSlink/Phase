@@ -206,7 +206,44 @@ is a fixed-size digest of the canonical payload, keeping it under wallet
 
 Flags are read via `lib/feature-flags.ts:isFeatureEnabled`. Client flags use `NEXT_PUBLIC_*`, server also accepts `FEATURE_*`. Zero regression when off.
 
-## 11) Change-management rules
+## 11) Soroban Contracts (Spikes 645–648)
+
+### phase-protocol (Spike 645 — SEP-50 Conformance)
+Main PHASE NFT contract now fully SEP-50 compliant:
+- `token_metadata()` returns Map with required fields: `name`, `description`, `image`, `mime_type`, `properties`
+- Properties JSON includes: `token_id`, `phase_level`, `collection_id`
+- `owner_of()`, `token_uri()` per SEP-50 spec
+- Transfer/approval functions support SEP-50 multi-signature workflows
+- Contract events (mint, transfer) aligned with SEP-50 indexer expectations
+
+### proof-relay (Spike 647 — Cross-Chain Verification)
+Generic cross-chain proof verification contract:
+- `submit_proof(msg_id, proof_data, source_chain)` — register proof for multi-sig verification
+- `verify_proof(msg_id, signatures)` — multi-signature threshold validation
+- `get_proof(msg_id)` — retrieve proof status (Pending | Verified | Failed)
+- Chainwhitelist for supported external systems
+- Nonce-based replay protection per source chain
+- Validator set with configurable 3-of-N threshold
+
+### explorer-metadata (Spike 648 — Explorer Integration)
+Collection metadata for explorer verification badges:
+- `set_explorer_metadata(collection_id, name, external_url)` — register collection for discovery
+- `verify_collection(collection_id)` — admin verification (displays badge)
+- `get_metadata(collection_id)` — retrieves name, URL, verification status
+- `is_verified(collection_id)` — quick check for badge eligibility
+- Deep-links to Stellar Expert and Soroban Explorer
+
+### API Endpoints (Spike 647–648)
+- `POST /api/proof-verify` — submit cross-chain proof with signatures
+- `GET /api/proof-verify?msg_id=...` — check proof verification status
+- `POST /api/explorer-verify` — register collection metadata
+- `GET /api/explorer-verify?collection_id=...` — retrieve explorer metadata
+
+### UI Components (Spike 648)
+- `components/nft/VerificationBadge.tsx` — displays verified artist badge with Stellar Expert link
+- `components/nft/ExplorerLinks.tsx` — deep-links to Stellar Expert and Soroban Explorer
+
+## 12) Change-management rules
 
 - Architectural changes require updates to:
   - `PROJECT_ARCHITECTURE.md` (this file)
