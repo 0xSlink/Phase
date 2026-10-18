@@ -11,6 +11,9 @@ export type ProfileData = {
   avatar_token_id?: number;
   avatar_image_url?: string;
   locale?: ProfileLocale;
+  tos_version?: string;
+  privacy_version?: string;
+  accepted_at?: number;
   updated_at: number;
 };
 

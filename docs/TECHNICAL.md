@@ -653,3 +653,18 @@ Flags: `phase-162` (SEP-10), `phase-163` (network), `phase-164` (age gate), `pha
 Sidecars (`.data/`, or `PHASE_SERVER_DATA_DIR`): `auth-sessions.json` (SHA-256 of session tokens and consumed challenge hashes only), `age-declarations.json` (bands only, no birth years), `license-attestations.json` (one per collection, nonce-unique).
 
 Known gaps: header-based routes (`acting_wallet`, `X-Wallet-Address`) are not yet migrated to sessions; sidecar writes are unlocked (single-instance only, same as other sidecars); viewer/claim-side age gating and mainnet seeding are not implemented.
+
+## 16. Legal Consent and Versioning (Spike 632 / Issue #495)
+
+Flag: `phase-166` (`NEXT_PUBLIC_FEATURE_PHASE_166` / `FEATURE_PHASE_166`), default off. Rollback: unset var, restart.
+
+| Endpoint | Method | Scope | Contract |
+|---|---|---|---|
+| `/api/legal/documents` | GET | public | Returns canonical legal documents (Terms of Service, Privacy Policy), current active versions (`2026-10-01`), and SHA-256 content hashes with localized strings (`lang=en\|es`). |
+| `/api/legal/consent` | GET | wallet query | Returns consent status (`accepted`, `pending_documents`, `current_versions`) for a wallet. |
+| `/api/legal/consent` | POST | JSON | Validates document version and SHA-256 hash match, atomically records acceptance in `terms-consents.json`. |
+| `/api/profile` | GET | wallet query | When `phase-166` is enabled, enriches profile response with `consent` status. |
+| `/api/profile` | POST | JSON | When `phase-166` is enabled, enforces that the wallet has accepted the current legal agreements before modifying profile, returning `451 CONSENT_REQUIRED` otherwise. |
+
+Sidecars (`.data/`, or `PHASE_SERVER_DATA_DIR`): `terms-consents.json` (keyed by wallet, stores pinned versions and content digests), `legal-documents.json` (optional overrides).
+
