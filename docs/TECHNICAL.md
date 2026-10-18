@@ -679,4 +679,15 @@ Flag: `phase-167` (`NEXT_PUBLIC_FEATURE_PHASE_167` / `FEATURE_PHASE_167`), defau
 
 Bundle manifest format: `phase-gdpr-article-20-bundle` with strict schema version `1.0.0`.
 
+## 18. Moderation & Regulatory Audit Export (Spike 635 / Issue #497)
+
+Flag: `phase-168` (`NEXT_PUBLIC_FEATURE_PHASE_168` / `FEATURE_PHASE_168`), default off. Rollback: unset var, restart.
+
+| Endpoint | Method | Scope | Contract |
+|---|---|---|---|
+| `/api/moderation/export` | GET | role-gated | Exports moderation audit trail with date range (`from`, `to`), action, and cursor pagination. Role-gated by `x-admin-key` / `x-moderator-key` for `"moderator"` (unredacted internal view) and `x-regulator-token` for `"regulator"` (cryptographically pseudonymized wallets, stripped signatures, sanitized reasons). Supports formats `json`, `ndjson`, and `csv` with `Content-Disposition: attachment`. |
+
+Role credentials: `PHASE_ADMIN_KEY`, `PHASE_MODERATOR_KEY`, and `PHASE_REGULATOR_TOKEN`.
+
+
 

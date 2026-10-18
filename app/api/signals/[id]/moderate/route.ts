@@ -56,7 +56,8 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 })
   }
   const { id } = await params
-  return NextResponse.json({ events: await getModerationAuditEvents(id) })
+  const events = await getModerationAuditEvents(id)
+  return NextResponse.json({ events })
 }
 
 /**
